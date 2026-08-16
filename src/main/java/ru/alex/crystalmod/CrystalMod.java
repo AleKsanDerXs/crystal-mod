@@ -12,17 +12,12 @@ import org.slf4j.Logger;
 import ru.alex.crystalmod.net.AtmDepositPayload;
 import ru.alex.crystalmod.net.AtmWithdrawPayload;
 import ru.alex.crystalmod.net.BalanceRequestPayload;
-import ru.alex.crystalmod.net.BalanceResponsePayload;
 import ru.alex.crystalmod.net.CancelListingPayload;
-import ru.alex.crystalmod.net.CancelListingResultPayload;
 import ru.alex.crystalmod.net.CrystalHandshakePayload;
 import ru.alex.crystalmod.net.ListItemPayload;
 import ru.alex.crystalmod.net.MarketBrowseRequestPayload;
-import ru.alex.crystalmod.net.MarketBrowseResponsePayload;
 import ru.alex.crystalmod.net.MarketBuyPayload;
-import ru.alex.crystalmod.net.MarketBuyResultPayload;
 import ru.alex.crystalmod.net.MyListingsRequestPayload;
-import ru.alex.crystalmod.net.MyListingsResponsePayload;
 import ru.alex.crystalmod.net.ServerPayloadHandler;
 
 /**
@@ -65,19 +60,15 @@ public class CrystalMod {
         registrar.playToServer(AtmWithdrawPayload.TYPE, AtmWithdrawPayload.STREAM_CODEC, ServerPayloadHandler::handleAtmWithdraw);
         registrar.playToServer(ListItemPayload.TYPE, ListItemPayload.STREAM_CODEC, ServerPayloadHandler::handleListItem);
         registrar.playToServer(MyListingsRequestPayload.TYPE, MyListingsRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleMyListingsRequest);
-        registrar.playToClient(MyListingsResponsePayload.TYPE, MyListingsResponsePayload.STREAM_CODEC,
-                ru.alex.crystalmod.client.ClientPayloadHandler::handleMyListingsResponse);
         registrar.playToServer(MarketBrowseRequestPayload.TYPE, MarketBrowseRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleMarketBrowseRequest);
-        registrar.playToClient(MarketBrowseResponsePayload.TYPE, MarketBrowseResponsePayload.STREAM_CODEC,
-                ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketBrowseResponse);
         registrar.playToServer(MarketBuyPayload.TYPE, MarketBuyPayload.STREAM_CODEC, ServerPayloadHandler::handleMarketBuy);
-        registrar.playToClient(MarketBuyResultPayload.TYPE, MarketBuyResultPayload.STREAM_CODEC,
-                ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketBuyResult);
         registrar.playToServer(CancelListingPayload.TYPE, CancelListingPayload.STREAM_CODEC, ServerPayloadHandler::handleCancelListing);
-        registrar.playToClient(CancelListingResultPayload.TYPE, CancelListingResultPayload.STREAM_CODEC,
-                ru.alex.crystalmod.client.ClientPayloadHandler::handleCancelListingResult);
         registrar.playToServer(BalanceRequestPayload.TYPE, BalanceRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleBalanceRequest);
-        registrar.playToClient(BalanceResponsePayload.TYPE, BalanceResponsePayload.STREAM_CODEC,
-                ru.alex.crystalmod.client.ClientPayloadHandler::handleBalanceResponse);
+
+        // playToClient(...) со ссылками на ClientPayloadHandler — только на клиенте,
+        // см. javadoc CrystalModClient.registerClientPayloads про то, почему.
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            ru.alex.crystalmod.client.CrystalModClient.registerClientPayloads(registrar);
+        }
     }
 }
