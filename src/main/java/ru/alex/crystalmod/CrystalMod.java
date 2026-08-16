@@ -12,12 +12,17 @@ import org.slf4j.Logger;
 import ru.alex.crystalmod.net.AtmDepositPayload;
 import ru.alex.crystalmod.net.AtmWithdrawPayload;
 import ru.alex.crystalmod.net.BalanceRequestPayload;
+import ru.alex.crystalmod.net.BalanceResponsePayload;
 import ru.alex.crystalmod.net.CancelListingPayload;
+import ru.alex.crystalmod.net.CancelListingResultPayload;
 import ru.alex.crystalmod.net.CrystalHandshakePayload;
 import ru.alex.crystalmod.net.ListItemPayload;
 import ru.alex.crystalmod.net.MarketBrowseRequestPayload;
+import ru.alex.crystalmod.net.MarketBrowseResponsePayload;
 import ru.alex.crystalmod.net.MarketBuyPayload;
+import ru.alex.crystalmod.net.MarketBuyResultPayload;
 import ru.alex.crystalmod.net.MyListingsRequestPayload;
+import ru.alex.crystalmod.net.MyListingsResponsePayload;
 import ru.alex.crystalmod.net.ServerPayloadHandler;
 
 /**
@@ -65,10 +70,26 @@ public class CrystalMod {
         registrar.playToServer(CancelListingPayload.TYPE, CancelListingPayload.STREAM_CODEC, ServerPayloadHandler::handleCancelListing);
         registrar.playToServer(BalanceRequestPayload.TYPE, BalanceRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleBalanceRequest);
 
-        // playToClient(...) со ссылками на ClientPayloadHandler — только на клиенте,
-        // см. javadoc CrystalModClient.registerClientPayloads про то, почему.
-        if (FMLEnvironment.dist == Dist.CLIENT) {
-            ru.alex.crystalmod.client.CrystalModClient.registerClientPayloads(registrar);
-        }
+        // playToClient(...) — тип/кодек/optional-флаг ОБЯЗАНЫ совпадать на обеих сторонах: при
+        // рукопожатии NetworkComponentNegotiator сравнивает список зарегистрированных каналов
+        // клиента и сервера, и если у одной из сторон канал не-optional, а у другой его вообще
+        // нет — соединение рвётся ("Incompatible client!", проверено на живом сервере — раньше
+        // тут был if (Dist.CLIENT), сервер эти 5 каналов вообще не регистрировал, и ВСЕ игроки
+        // переставали заходить). Поэтому регистрируем канал одинаково всегда, но настоящий
+        // обработчик (метод-референс в ClientPayloadHandler — а тот трогает Screen-наследников,
+        // недоступных на DEDICATED_SERVER, см. предыдущий коммит) подставляем только на клиенте;
+        // на сервере — обработчик-пустышка без единой ссылки на клиентские классы, который в
+        // реальности никогда не вызовется (сервер playToClient-пакеты не получает, только шлёт).
+        boolean client = FMLEnvironment.dist == Dist.CLIENT;
+        registrar.playToClient(MyListingsResponsePayload.TYPE, MyListingsResponsePayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMyListingsResponse : (payload, ctx) -> {});
+        registrar.playToClient(MarketBrowseResponsePayload.TYPE, MarketBrowseResponsePayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketBrowseResponse : (payload, ctx) -> {});
+        registrar.playToClient(MarketBuyResultPayload.TYPE, MarketBuyResultPayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketBuyResult : (payload, ctx) -> {});
+        registrar.playToClient(CancelListingResultPayload.TYPE, CancelListingResultPayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleCancelListingResult : (payload, ctx) -> {});
+        registrar.playToClient(BalanceResponsePayload.TYPE, BalanceResponsePayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleBalanceResponse : (payload, ctx) -> {});
     }
 }
