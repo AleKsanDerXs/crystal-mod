@@ -1,0 +1,17 @@
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "${mod_license}"
+[[mods]]
+modId = "${mod_id}"
+version = "${mod_version}"
+displayName = "${mod_name}"
+description = "Валюта «Хрусталики» сайта Runes & Rails: банкнота с серийным номером (анти-дюп), команда выдачи /crystal give и депозит обратно на сайт по ПКМ."
+
+[[dependencies.${mod_id}]]
+modId = "neoforge"
+mandatory = true
+versionRange = "[21.1,)"
+ordering = "NONE"
+# BOTH, а не SERVER (как у authmod) — предмету нужен клиент для текстуры/тултипа,
+# в отличие от чисто серверной логики авторизации.
+side = "BOTH"

@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# NeoForge dev runs (server/client working dirs, logs, local worlds)
+run/
+runs/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.eclipse/
+.settings/
+.classpath
+.project
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / locks
+*.log
+*.lock
+
+# Local mod config (real apiSecret lives here at runtime, never in source)
+config/Xs_Crystal/
