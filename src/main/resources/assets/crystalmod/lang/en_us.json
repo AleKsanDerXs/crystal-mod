@@ -2,7 +2,6 @@
     "itemGroup.crystalmod.main": "Runes & Rails: Crystals",
     "item.crystalmod.crystal_note": "Crystals (%s)",
     "item.crystalmod.crystal_note.value": "Value: %s",
-    "item.crystalmod.crystal_note.hint": "Right-click to deposit to your site balance",
 
     "block.crystalmod.atm": "Crystal ATM",
     "block.crystalmod.market_terminal": "Market Terminal",

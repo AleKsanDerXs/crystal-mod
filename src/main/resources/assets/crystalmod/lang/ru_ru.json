@@ -2,7 +2,6 @@
     "itemGroup.crystalmod.main": "Runes & Rails: Хрусталики",
     "item.crystalmod.crystal_note": "Хрусталики (%s)",
     "item.crystalmod.crystal_note.value": "Номинал: %s",
-    "item.crystalmod.crystal_note.hint": "ПКМ — сдать на баланс сайта",
 
     "block.crystalmod.atm": "Банкомат хрусталиков",
     "block.crystalmod.market_terminal": "Терминал рынка",

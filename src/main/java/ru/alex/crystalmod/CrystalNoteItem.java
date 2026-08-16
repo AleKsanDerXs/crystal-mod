@@ -44,8 +44,6 @@ public class CrystalNoteItem extends Item {
         CrystalNoteContents c = contents(stack);
         tooltip.add(Component.translatable("item.crystalmod.crystal_note.value", c.value())
                 .withStyle(ChatFormatting.AQUA));
-        tooltip.add(Component.translatable("item.crystalmod.crystal_note.hint")
-                .withStyle(ChatFormatting.DARK_GRAY));
         if (flag.isAdvanced()) {
             tooltip.add(Component.literal("serial: " + c.serial()).withStyle(ChatFormatting.DARK_GRAY));
         }
