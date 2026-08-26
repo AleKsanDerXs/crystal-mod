@@ -407,10 +407,14 @@ public final class CrystalCommands {
         // зачарованные экземпляры одного предмета, данные берём с ПЕРВОГО тронутого
         // слота (лучшее, что можно сделать для команды, не гарантирующей однородность).
         String itemData = "";
+        List<String> tooltipLines = List.of();
         for (int i = 0; i < container.getContainerSize() && remaining > 0; i++) {
             ItemStack s = container.getItem(i);
             if (s.getItem() != item) continue;
-            if (itemData.isEmpty()) itemData = ItemDataCodec.encode(s, player.registryAccess());
+            if (itemData.isEmpty()) {
+                itemData = ItemDataCodec.encode(s, player.registryAccess());
+                tooltipLines = ItemDataCodec.tooltipLines(s, player);
+            }
             int take = Math.min(remaining, s.getCount());
             touchedSlots.add(i);
             touchedCounts.add(take);
@@ -423,7 +427,7 @@ public final class CrystalCommands {
         String txId = CrystalAPI.newTxId();
         source.sendSuccess(() -> Component.translatable("crystalmod.market.listing_pending"), false);
 
-        CrystalAPI.createListingDirectAsync(txId, username, registryId, quantity, price, itemData)
+        CrystalAPI.createListingDirectAsync(txId, username, registryId, quantity, price, itemData, tooltipLines)
                 .thenAccept(result -> player.getServer().execute(() -> {
                     if (result.get("ok").getAsBoolean()) {
                         player.sendSystemMessage(Component.translatable("crystalmod.market.listing_created",

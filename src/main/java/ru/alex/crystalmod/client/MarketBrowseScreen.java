@@ -193,6 +193,14 @@ public class MarketBrowseScreen extends Screen {
         for (int i = 0; i < visible; i++) {
             Row row = rows.get(scroll + i);
             int rowY = panelTop + LIST_TOP_OFFSET + i * ROW_HEIGHT;
+
+            Button detailsBtn = Button.builder(Component.literal("i"), b -> this.minecraft.setScreen(new ItemDetailsScreen(row.stack(), this)))
+                    .bounds(panelLeft + panelWidth - 88, rowY, 20, ROW_HEIGHT - 2)
+                    .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("crystalmod.market_block.details_button")))
+                    .build();
+            this.addRenderableWidget(detailsBtn);
+            rowButtons.add(detailsBtn);
+
             Button buyBtn = Button.builder(Component.translatable("crystalmod.market_block.browse_buy_button"), b -> {
                         int qty = Math.max(1, Math.min(parseQty(), row.qty()));
                         buyingRowId = row.id();

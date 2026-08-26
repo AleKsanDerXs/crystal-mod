@@ -121,9 +121,12 @@ public class MarketListingMenu extends AbstractContainerMenu {
         int quantity = stack.getCount();
         // Зачарования/имя/содержимое рюкзака и т.п. — иначе покупатель получит "голый" предмет.
         String itemData = ItemDataCodec.encode(stack, serverPlayer.registryAccess());
+        // Текст тултипа (в т.ч. содержимое шалкера/рюкзака) — сайт сам NBT не разбирает,
+        // отдаём готовый список строк для кнопки «Подробнее» на /market.
+        java.util.List<String> tooltipLines = ItemDataCodec.tooltipLines(stack, serverPlayer);
         serverPlayer.sendSystemMessage(Component.translatable("crystalmod.market.listing_pending").withStyle(ChatFormatting.GRAY));
 
-        CrystalAPI.createListingDirectAsync(txId, username, registryId, quantity, price, itemData)
+        CrystalAPI.createListingDirectAsync(txId, username, registryId, quantity, price, itemData, tooltipLines)
                 .thenAccept(result -> serverPlayer.getServer().execute(() -> {
                     busy = false;
                     pendingTxId = null; // определённый исход

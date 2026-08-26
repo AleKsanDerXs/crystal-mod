@@ -76,6 +76,7 @@
     "crystalmod.market_block.browse_qty_label": "Qty:",
     "crystalmod.market_block.browse_qty_placeholder": "1",
     "crystalmod.market_block.browse_buy_button": "Buy",
+    "crystalmod.market_block.details_button": "Details",
     "crystalmod.market_block.browse_empty": "Nothing found",
     "crystalmod.market_block.browse_unreachable": "Site unreachable, try again later",
     "crystalmod.market_block.browse_page": "Page %s / %s",

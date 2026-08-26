@@ -57,7 +57,7 @@ public class MyListingsScreen extends Screen {
 
     @Override
     protected void init() {
-        int panelWidth = 260;
+        int panelWidth = 300; // +40 к прежним 260 — под добавленную кнопку «i» (подробнее) в каждой строке
         panelLeft = (this.width - panelWidth) / 2;
         top = (this.height - VISIBLE_ROWS * ROW_HEIGHT) / 2 - 20;
         int bottom = (this.height + VISIBLE_ROWS * ROW_HEIGHT) / 2 + 40;
@@ -111,11 +111,19 @@ public class MyListingsScreen extends Screen {
         rowButtons.clear();
         if (rows == null) return;
 
-        int panelWidth = 260;
+        int panelWidth = 300; // +40 к прежним 260 — под добавленную кнопку «i» (подробнее) в каждой строке
         int visible = Math.min(VISIBLE_ROWS, rows.size() - scroll);
         for (int i = 0; i < visible; i++) {
             Row row = rows.get(scroll + i);
             int rowY = top + i * ROW_HEIGHT;
+
+            Button detailsBtn = Button.builder(Component.literal("i"), b -> this.minecraft.setScreen(new ItemDetailsScreen(row.stack(), this)))
+                    .bounds(panelLeft + panelWidth - 88, rowY, 20, ROW_HEIGHT - 2)
+                    .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("crystalmod.market_block.details_button")))
+                    .build();
+            this.addRenderableWidget(detailsBtn);
+            rowButtons.add(detailsBtn);
+
             boolean cancellable = "active".equals(row.status()) || "pending_escrow".equals(row.status());
             if (!cancellable) continue;
 
@@ -148,7 +156,7 @@ public class MyListingsScreen extends Screen {
         this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        int panelWidth = 260;
+        int panelWidth = 300; // +40 к прежним 260 — под добавленную кнопку «i» (подробнее) в каждой строке
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, top - 16, 0xFFFFFF);
         BalanceOverlay.render(guiGraphics, this.font, this.width / 2, top - 34);
 

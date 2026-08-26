@@ -7,16 +7,21 @@ import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * Полная сериализация {@link ItemStack} (зачарования, кастомное имя, содержимое
@@ -77,5 +82,27 @@ public final class ItemDataCodec {
         if (!stack.isEmpty()) return stack;
         Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(registryId));
         return new ItemStack(item, count);
+    }
+
+    /**
+     * Текстовые строки тултипа предмета (имя + лор/зачарования/содержимое шалкера
+     * и любого другого контейнера, который добавляет их через обычный
+     * {@code appendHoverText} — тот же метод, что даёт ванильный список "до 5
+     * предметов + ещё N" у шалкер-бокса, см. {@code ShulkerBoxBlock}). Считается
+     * СЕРВЕРНО в момент выставления лота и уходит на сайт отдельным полем — PHP
+     * не умеет разбирать NBT и не может получить этот текст из item_data сам,
+     * а мод-версии рынка (терминал) он не нужен вовсе: там тултип всегда живой,
+     * из уже раскодированного стека (см. {@code ItemDetailsScreen}).
+     */
+    public static List<String> tooltipLines(ItemStack stack, ServerPlayer player) {
+        List<String> lines = new ArrayList<>();
+        try {
+            for (Component line : stack.getTooltipLines(Item.TooltipContext.of(player.level()), player, TooltipFlag.NORMAL)) {
+                lines.add(line.getString());
+            }
+        } catch (Exception e) {
+            CrystalMod.LOGGER.warn("ItemDataCodec: не удалось собрать тултип для {} ({})", stack, e.getMessage());
+        }
+        return lines;
     }
 }

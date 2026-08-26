@@ -76,6 +76,7 @@
     "crystalmod.market_block.browse_qty_label": "Кол-во:",
     "crystalmod.market_block.browse_qty_placeholder": "1",
     "crystalmod.market_block.browse_buy_button": "Купить",
+    "crystalmod.market_block.details_button": "Подробнее",
     "crystalmod.market_block.browse_empty": "Ничего не найдено",
     "crystalmod.market_block.browse_unreachable": "Сайт недоступен, попробуйте позже",
     "crystalmod.market_block.browse_page": "Стр. %s / %s",

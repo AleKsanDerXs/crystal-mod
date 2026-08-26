@@ -264,8 +264,8 @@ public class CrystalAPI {
     // ── Прямое выставление лота (блок рынка / op-команда из сундука) ───────────
 
     /** {@code ok}/{@code listing_id}/{@code status}, либо {@code ok=false}/{@code error}. */
-    public static JsonObject createListingDirect(String txId, String username, String registryId, int quantity, int pricePerUnit, String itemData)
-            throws IOException, InterruptedException {
+    public static JsonObject createListingDirect(String txId, String username, String registryId, int quantity, int pricePerUnit,
+            String itemData, List<String> tooltipLines) throws IOException, InterruptedException {
         JsonObject body = new JsonObject();
         body.addProperty("tx_id", txId);
         body.addProperty("username", username);
@@ -273,6 +273,9 @@ public class CrystalAPI {
         body.addProperty("quantity", quantity);
         body.addProperty("price_per_unit", pricePerUnit);
         body.addProperty("item_data", itemData);
+        JsonArray tooltipArr = new JsonArray();
+        tooltipLines.forEach(tooltipArr::add);
+        body.add("tooltip_lines", tooltipArr);
 
         String url = ConfigManager.CONFIG.apiBaseUrl.replaceAll("/+$", "") + "/crystals_market_api.php?action=create_listing_direct";
         HttpResponse<String> response = PhpApiClient.postJson(url, ConfigManager.CONFIG.apiSecret, body.toString());
@@ -292,10 +295,11 @@ public class CrystalAPI {
         return data;
     }
 
-    public static CompletableFuture<JsonObject> createListingDirectAsync(String txId, String username, String registryId, int quantity, int pricePerUnit, String itemData) {
+    public static CompletableFuture<JsonObject> createListingDirectAsync(String txId, String username, String registryId, int quantity,
+            int pricePerUnit, String itemData, List<String> tooltipLines) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return createListingDirect(txId, username, registryId, quantity, pricePerUnit, itemData);
+                return createListingDirect(txId, username, registryId, quantity, pricePerUnit, itemData, tooltipLines);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при create_listing_direct tx={} ({})", txId, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
