@@ -92,6 +92,26 @@ public class CrystalAPI {
         return java.util.UUID.randomUUID().toString();
     }
 
+    static CompletableFuture<JsonObject> stallPaymentAsync(String action, String stallId, StallJournal.Operation op) {
+        return supply("stall_"+action, () -> {
+            JsonObject body=new JsonObject();
+            body.addProperty("tx_id",op.txId); body.addProperty("stall_id",stallId);
+            body.addProperty("buyer",op.buyer); body.addProperty("seller",op.seller);
+            body.addProperty("quantity",op.quantity); body.addProperty("price",op.price);
+            String url=ConfigManager.CONFIG.apiBaseUrl.replaceAll("/+$", "")+"/crystals_stall_api.php?action="+action;
+            var response=PhpApiClient.postJson(url,ConfigManager.CONFIG.apiSecret,body.toString());
+            // A proxy/host error is an UNKNOWN outcome, never a reason to refund or retry with a new id.
+            if(response.statusCode()!=200 && response.statusCode()!=400) throw new IOException("Stall HTTP "+response.statusCode());
+            JsonObject json;
+            try { json=GSON.fromJson(response.body(),JsonObject.class); }
+            catch(RuntimeException e) { throw new IOException("Invalid stall response",e); }
+            if(json==null || !json.has("ok")) throw new IOException("Invalid stall response");
+            if(!json.get("ok").getAsBoolean()) return json;
+            if(!json.has("data") || !json.getAsJsonObject("data").has("status")) throw new IOException("Missing payment state");
+            JsonObject data=json.getAsJsonObject("data"); data.addProperty("ok",true); return data;
+        });
+    }
+
     // ── Банкомат / команда deposit: внести (пачка банкнот на сумму + сдача) ────
 
     /**
@@ -457,5 +477,123 @@ public class CrystalAPI {
                 throw new java.util.concurrent.CompletionException(e);
             }
         }, ASYNC_EXECUTOR);
+    }
+
+    // ── Общие помощники для новых методов ─────────────────────────────────────
+
+    @FunctionalInterface
+    private interface IoCall {
+        JsonObject call() throws IOException, InterruptedException;
+    }
+
+    private static CompletableFuture<JsonObject> supply(String what, IoCall call) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return call.call();
+            } catch (IOException | InterruptedException e) {
+                LOGGER.warn("CrystalAPI: сайт недоступен при {} ({})", what, e.getMessage());
+                throw new java.util.concurrent.CompletionException(e);
+            }
+        }, ASYNC_EXECUTOR);
+    }
+
+    private static String enc(String s) {
+        return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static String marketUrl(String action) {
+        return ConfigManager.CONFIG.apiBaseUrl.replaceAll("/+$", "") + "/crystals_market_api.php?action=" + action;
+    }
+
+    /** Единый разбор ответа сайта: {@code ok=false}/{@code error} либо содержимое {@code data} + {@code ok=true}. */
+    private static JsonObject normalize(HttpResponse<String> response) {
+        JsonObject authErr = authErrorOrNull(response.statusCode());
+        if (authErr != null) return authErr;
+        JsonObject json = null;
+        try {
+            json = GSON.fromJson(response.body(), JsonObject.class);
+        } catch (RuntimeException ignored) {
+            // не JSON (например, страница ошибки хостинга) — ниже вернём unknown_error
+        }
+        if (json == null || !json.has("ok") || !json.get("ok").getAsBoolean()) {
+            JsonObject result = new JsonObject();
+            result.addProperty("ok", false);
+            result.addProperty("error", json != null && json.has("error") ? json.get("error").getAsString() : "unknown_error");
+            return result;
+        }
+        JsonObject data = json.has("data") && json.get("data").isJsonObject() ? json.getAsJsonObject("data") : new JsonObject();
+        data.addProperty("ok", true);
+        return data;
+    }
+
+    // ── Каталог рынка, сгруппированный по предмету (вид по умолчанию в терминале) ──
+
+    /** {@code ok}/{@code items} (JsonArray {registry_id, min_price, total_qty, listings_count})/{@code total}/{@code page}/{@code per_page}. */
+    public static JsonObject marketGrouped(String search, String sort, int page, int perPage) throws IOException, InterruptedException {
+        String url = marketUrl("list_grouped_mod") + "&search=" + enc(search) + "&sort=" + enc(sort) + "&page=" + page + "&per_page=" + perPage;
+        return normalize(PhpApiClient.get(url, ConfigManager.CONFIG.apiSecret));
+    }
+
+    public static CompletableFuture<JsonObject> marketGroupedAsync(String search, String sort, int page, int perPage) {
+        return supply("list_grouped_mod", () -> marketGrouped(search, sort, page, perPage));
+    }
+
+    /** Все активные лоты одного предмета (от дешёвых): {@code ok}/{@code items} (JsonArray как в list_mod). */
+    public static JsonObject marketItemLots(String registryId) throws IOException, InterruptedException {
+        String url = marketUrl("item_lots_mod") + "&registry_id=" + enc(registryId);
+        return normalize(PhpApiClient.get(url, ConfigManager.CONFIG.apiSecret));
+    }
+
+    public static CompletableFuture<JsonObject> marketItemLotsAsync(String registryId) {
+        return supply("item_lots_mod", () -> marketItemLots(registryId));
+    }
+
+    // ── Рыночный инвентарь игрока на сайте ─────────────────────────────────────
+
+    /**
+     * Предметы игрока, лежащие в рыночном инвентаре сайта: {@code ok}/{@code items} (JsonArray {id, registry_id, quantity, status,
+     * item_data, season_name, source_mod, is_vanilla, server_name, origin}).
+     */
+    public static JsonObject inventoryList(String username) throws IOException, InterruptedException {
+        String url = marketUrl("inv_list_mod") + "&username=" + enc(username);
+        return normalize(PhpApiClient.get(url, ConfigManager.CONFIG.apiSecret));
+    }
+
+    public static CompletableFuture<JsonObject> inventoryListAsync(String username) {
+        return supply("inv_list_mod", () -> inventoryList(username));
+    }
+
+    /**
+     * Бронь предмета под выдачу в игру. Либо по брони сайта ({@code claimId}, inventoryId=null — сайт забронировал сам и вызвал команду),
+     * либо новая из игры (inventoryId + quantity; {@code claimId} — tx для идемпотентного повтора). Ответ: {@code ok}/{@code claim_id}/
+     * {@code inventory_id}/{@code registry_id}/{@code quantity}/{@code item_data} либо {@code ok=false}/{@code error}.
+     * После выдачи ОБЯЗАТЕЛЬНО вызвать {@link #inventoryConfirm}.
+     */
+    public static JsonObject inventoryClaim(String username, String claimId, Integer inventoryId, int quantity) throws IOException, InterruptedException {
+        JsonObject body = new JsonObject();
+        body.addProperty("username", username);
+        if (claimId != null) body.addProperty("claim_id", claimId);
+        if (inventoryId != null) {
+            body.addProperty("inventory_id", inventoryId);
+            body.addProperty("quantity", quantity);
+        }
+        return normalize(PhpApiClient.postJson(marketUrl("inv_claim_mod"), ConfigManager.CONFIG.apiSecret, body.toString()));
+    }
+
+    public static CompletableFuture<JsonObject> inventoryClaimAsync(String username, String claimId, Integer inventoryId, int quantity) {
+        return supply("inv_claim_mod", () -> inventoryClaim(username, claimId, inventoryId, quantity));
+    }
+
+    /** Итог выдачи: ok=true — предмет в игре (claimed); ok=false — вернуть в инвентарь сайта. Повтор безопасен (идемпотентно). */
+    public static JsonObject inventoryConfirm(String claimId, boolean ok, String reason) throws IOException, InterruptedException {
+        JsonObject body = new JsonObject();
+        body.addProperty("claim_id", claimId);
+        body.addProperty("ok", ok);
+        if (reason != null) body.addProperty("reason", reason);
+        return normalize(PhpApiClient.postJson(marketUrl("inv_confirm_mod"), ConfigManager.CONFIG.apiSecret, body.toString()));
+    }
+
+    public static CompletableFuture<JsonObject> inventoryConfirmAsync(String claimId, boolean ok, String reason) {
+        return supply("inv_confirm_mod", () -> inventoryConfirm(claimId, ok, reason));
     }
 }

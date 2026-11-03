@@ -20,6 +20,10 @@ public class CrystalMenus {
     public static final DeferredHolder<MenuType<?>, MenuType<MarketListingMenu>> MARKET_LISTING_MENU =
             MENUS.register("market_listing", () -> new MenuType<>(MarketListingMenu::new, FeatureFlags.VANILLA_SET));
 
+    public static final DeferredHolder<MenuType<?>, MenuType<MarketStallMenu>> MARKET_STALL_MENU =
+            MENUS.register("market_stall", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(
+                    (id,inv,buf) -> new MarketStallMenu(id,inv,buf.readBlockPos())));
+
     public static void register(IEventBus modBus) {
         MENUS.register(modBus);
     }

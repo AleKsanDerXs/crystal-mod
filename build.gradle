@@ -32,6 +32,7 @@ runs {
 repositories {}
 
 dependencies {
+    compileOnly files("../../Client_mods aero pack/mods/open-parties-and-claims-neoforge-1.21.1-0.29.3.jar")
     implementation "net.neoforged:neoforge:${neo_version}"
 }
 
@@ -54,4 +55,10 @@ tasks.withType(ProcessResources).configureEach {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// Explicit opt-in client integration harness; excluded from release jars.
+if (project.hasProperty('stallTest')) {
+    sourceSets.main.java.srcDir('src/testClient/java')
+    dependencies { compileOnly files('../../Client_mods aero pack/mods/carryon-neoforge-1.21.1-2.2.4.4.jar') }
 }

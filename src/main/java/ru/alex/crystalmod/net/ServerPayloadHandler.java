@@ -140,6 +140,77 @@ public final class ServerPayloadHandler {
         });
     }
 
+    /** Сгруппированный каталог: одна строка на предмет (registryId|minPrice|totalQty|listingsCount). */
+    public static void handleMarketGroupedRequest(MarketGroupedRequestPayload payload, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (!(ctx.player() instanceof ServerPlayer player)) return;
+
+            CrystalAPI.marketGroupedAsync(payload.search(), payload.sort(), payload.page(), 20)
+                    .thenAccept(result -> player.getServer().execute(() -> {
+                        List<String> rows = new ArrayList<>();
+                        int total = 0, page = 1, perPage = 20;
+                        if (result.get("ok").getAsBoolean()) {
+                            total = result.get("total").getAsInt();
+                            page = result.get("page").getAsInt();
+                            perPage = result.get("per_page").getAsInt();
+                            for (var el : result.getAsJsonArray("items")) {
+                                JsonObject g = el.getAsJsonObject();
+                                rows.add(String.join("|",
+                                        g.get("registry_id").getAsString(),
+                                        g.get("min_price").getAsString(),
+                                        g.get("total_qty").getAsString(),
+                                        g.get("listings_count").getAsString()));
+                            }
+                        } else {
+                            rows.add("!error");
+                        }
+                        PacketDistributor.sendToPlayer(player, new MarketGroupedResponsePayload(rows, total, page, perPage));
+                    }))
+                    .exceptionally(ex -> {
+                        player.getServer().execute(() -> {
+                            CrystalMod.LOGGER.warn("Не удалось загрузить сгруппированный каталог рынка: {}", ex.getMessage());
+                            PacketDistributor.sendToPlayer(player, new MarketGroupedResponsePayload(List.of("!error"), 0, payload.page(), 20));
+                        });
+                        return null;
+                    });
+        });
+    }
+
+    /** Открытие группы: лоты одного предмета отдаём в том же формате, что и обычный каталог (MarketBrowseResponsePayload). */
+    public static void handleMarketItemLotsRequest(MarketItemLotsRequestPayload payload, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (!(ctx.player() instanceof ServerPlayer player)) return;
+
+            CrystalAPI.marketItemLotsAsync(payload.registryId())
+                    .thenAccept(result -> player.getServer().execute(() -> {
+                        List<String> rows = new ArrayList<>();
+                        if (result.get("ok").getAsBoolean()) {
+                            for (var el : result.getAsJsonArray("items")) {
+                                JsonObject l = el.getAsJsonObject();
+                                rows.add(String.join("|",
+                                        l.get("id").getAsString(),
+                                        l.get("registry_id").getAsString(),
+                                        l.get("quantity_available").getAsString(),
+                                        l.get("price_per_unit").getAsString(),
+                                        l.get("seller_name").getAsString(),
+                                        itemDataOrEmpty(l)));
+                            }
+                        } else {
+                            rows.add("!error");
+                        }
+                        int n = Math.max(1, rows.size());
+                        PacketDistributor.sendToPlayer(player, new MarketBrowseResponsePayload(rows, rows.size(), 1, n));
+                    }))
+                    .exceptionally(ex -> {
+                        player.getServer().execute(() -> {
+                            CrystalMod.LOGGER.warn("Не удалось загрузить лоты предмета {}: {}", payload.registryId(), ex.getMessage());
+                            PacketDistributor.sendToPlayer(player, new MarketBrowseResponsePayload(List.of("!error"), 0, 1, 1));
+                        });
+                        return null;
+                    });
+        });
+    }
+
     /**
      * Восстанавливает предмет по ответу сайта (registry_id + опциональный item_data)
      * и кладёт его в инвентарь игрока, с падением на пол при переполненном инвентаре.
@@ -153,7 +224,9 @@ public final class ServerPayloadHandler {
                 ? result.get("item_data").getAsString() : null;
 
         ItemStack stack = ItemDataCodec.decodeOrPlain(itemData, registryId, quantity, player.registryAccess());
-        if (!player.getInventory().add(stack)) player.drop(stack, false);
+        // Inventory.add возвращает true и при НЕПОЛНОЙ вставке (остаток остаётся в stack) — роняем остаток на пол, а не теряем.
+        player.getInventory().add(stack);
+        if (!stack.isEmpty()) player.drop(stack, false);
     }
 
     public static void handleMarketBuy(MarketBuyPayload payload, IPayloadContext ctx) {

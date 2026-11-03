@@ -31,10 +31,13 @@ public final class CrystalModClient {
 
     public static void init(IEventBus modBus) {
         modBus.addListener(CrystalModClient::onRegisterMenuScreens);
+        modBus.addListener((net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
+                event.registerBlockEntityRenderer(ru.alex.crystalmod.CrystalItems.MARKET_STALL_ENTITY.get(), MarketStallRenderer::new));
     }
 
     private static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(CrystalMenus.ATM_MENU.get(), CrystalATMScreen::new);
+        event.register(CrystalMenus.MARKET_STALL_MENU.get(), MarketStallScreen::new);
         event.register(CrystalMenus.MARKET_LISTING_MENU.get(), MarketListingScreen::new);
     }
 }

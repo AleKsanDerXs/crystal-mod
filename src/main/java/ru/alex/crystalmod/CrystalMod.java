@@ -21,6 +21,9 @@ import ru.alex.crystalmod.net.MarketBrowseRequestPayload;
 import ru.alex.crystalmod.net.MarketBrowseResponsePayload;
 import ru.alex.crystalmod.net.MarketBuyPayload;
 import ru.alex.crystalmod.net.MarketBuyResultPayload;
+import ru.alex.crystalmod.net.MarketGroupedRequestPayload;
+import ru.alex.crystalmod.net.MarketGroupedResponsePayload;
+import ru.alex.crystalmod.net.MarketItemLotsRequestPayload;
 import ru.alex.crystalmod.net.MyListingsRequestPayload;
 import ru.alex.crystalmod.net.MyListingsResponsePayload;
 import ru.alex.crystalmod.net.ServerPayloadHandler;
@@ -39,8 +42,13 @@ public class CrystalMod {
 
     public CrystalMod(IEventBus modBus) {
         ConfigManager.loadConfig();
+        if (net.neoforged.fml.ModList.get().isLoaded("openpartiesandclaims")) {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                    net.neoforged.bus.api.EventPriority.HIGHEST, StallClaimsCompat::onPublicUse);
+        }
         CrystalItems.register(modBus);
         CrystalMenus.register(modBus);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(StallSales::onBreak);
         modBus.addListener(this::registerPayloads);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
@@ -69,6 +77,8 @@ public class CrystalMod {
         registrar.playToServer(MarketBuyPayload.TYPE, MarketBuyPayload.STREAM_CODEC, ServerPayloadHandler::handleMarketBuy);
         registrar.playToServer(CancelListingPayload.TYPE, CancelListingPayload.STREAM_CODEC, ServerPayloadHandler::handleCancelListing);
         registrar.playToServer(BalanceRequestPayload.TYPE, BalanceRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleBalanceRequest);
+        registrar.playToServer(MarketGroupedRequestPayload.TYPE, MarketGroupedRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleMarketGroupedRequest);
+        registrar.playToServer(MarketItemLotsRequestPayload.TYPE, MarketItemLotsRequestPayload.STREAM_CODEC, ServerPayloadHandler::handleMarketItemLotsRequest);
 
         // playToClient(...) — тип/кодек/optional-флаг ОБЯЗАНЫ совпадать на обеих сторонах: при
         // рукопожатии NetworkComponentNegotiator сравнивает список зарегистрированных каналов
@@ -85,6 +95,8 @@ public class CrystalMod {
                 client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMyListingsResponse : (payload, ctx) -> {});
         registrar.playToClient(MarketBrowseResponsePayload.TYPE, MarketBrowseResponsePayload.STREAM_CODEC,
                 client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketBrowseResponse : (payload, ctx) -> {});
+        registrar.playToClient(MarketGroupedResponsePayload.TYPE, MarketGroupedResponsePayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketGroupedResponse : (payload, ctx) -> {});
         registrar.playToClient(MarketBuyResultPayload.TYPE, MarketBuyResultPayload.STREAM_CODEC,
                 client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMarketBuyResult : (payload, ctx) -> {});
         registrar.playToClient(CancelListingResultPayload.TYPE, CancelListingResultPayload.STREAM_CODEC,

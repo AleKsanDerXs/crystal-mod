@@ -27,6 +27,14 @@ public class CrystalItems {
     public static final DeferredRegister<DataComponentType<?>> DATA_COMPONENTS =
             DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, CrystalMod.MOD_ID);
 
+    public static final DeferredRegister<net.minecraft.world.level.block.entity.BlockEntityType<?>> BLOCK_ENTITIES =
+            DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, CrystalMod.MOD_ID);
+    public static final DeferredBlock<MarketStallBlock> MARKET_STALL = BLOCKS.registerBlock("market_stall", MarketStallBlock::new,
+            BlockBehaviour.Properties.of().mapColor(MapColor.WOOD).strength(2.5F).sound(SoundType.WOOD).noOcclusion());
+    public static final DeferredItem<BlockItem> MARKET_STALL_ITEM = ITEMS.registerSimpleBlockItem(MARKET_STALL);
+    public static final DeferredHolder<net.minecraft.world.level.block.entity.BlockEntityType<?>, net.minecraft.world.level.block.entity.BlockEntityType<MarketStallEntity>> MARKET_STALL_ENTITY =
+            BLOCK_ENTITIES.register("market_stall", () -> net.minecraft.world.level.block.entity.BlockEntityType.Builder.of(MarketStallEntity::new, MARKET_STALL.get()).build(null));
+
     /** Банкомат — ПКМ открывает {@link CrystalATMMenu} (внести/снять). */
     public static final DeferredBlock<CrystalATMBlock> ATM = BLOCKS.registerBlock(
             "atm",
@@ -80,6 +88,7 @@ public class CrystalItems {
                     .displayItems((params, output) -> {
                         output.accept(CRYSTAL_NOTE.get());
                         output.accept(ATM_ITEM.get());
+                        output.accept(MARKET_STALL_ITEM.get());
                         output.accept(MARKET_TERMINAL_ITEM.get());
                     })
                     .build()
@@ -88,6 +97,7 @@ public class CrystalItems {
     public static void register(IEventBus modBus) {
         ITEMS.register(modBus);
         BLOCKS.register(modBus);
+        BLOCK_ENTITIES.register(modBus);
         TABS.register(modBus);
         DATA_COMPONENTS.register(modBus);
     }

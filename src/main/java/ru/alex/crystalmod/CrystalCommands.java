@@ -96,14 +96,121 @@ public final class CrystalCommands {
                                 .requires(source -> hasEconomyPermission(source, WITHDRAW_PERMISSION))
                                 .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                         .executes(CrystalCommands::withdrawCommand)))
+                        // Рыночный инвентарь сайта: список и выдача в игру (для игрока; без requires, как /crystal check)
+                        .then(Commands.literal("inventory")
+                                .executes(CrystalCommands::inventoryList)
+                                .then(Commands.literal("claim")
+                                        .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                                                .executes(ctx -> inventoryClaim(ctx, 0))
+                                                .then(Commands.argument("quantity", IntegerArgumentType.integer(1))
+                                                        .executes(ctx -> inventoryClaim(ctx, IntegerArgumentType.getInteger(ctx, "quantity")))))))
                         .then(Commands.literal("market")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.literal("listchest")
                                         .then(Commands.argument("registry_id", StringArgumentType.string())
                                                 .then(Commands.argument("quantity", IntegerArgumentType.integer(1))
                                                         .then(Commands.argument("price", IntegerArgumentType.integer(1))
-                                                                .executes(CrystalCommands::listFromChest))))))
+                                                                .executes(CrystalCommands::listFromChest)))))
+                                // RCON сайта: «В игру» в рыночном инвентаре → crystal market claim <ник> <claim_id>
+                                .then(Commands.literal("claim")
+                                        .then(Commands.argument("player", StringArgumentType.word())
+                                                .then(Commands.argument("claim_id", StringArgumentType.string())
+                                                        .executes(CrystalCommands::marketClaim)))))
         );
+    }
+
+    // ── Рыночный инвентарь сайта ───────────────────────────────────────────────
+
+    private static final RateLimiter INVENTORY_LIST_RATE_LIMITER = new RateLimiter(5, 60_000L);
+
+    /** {@code /crystal inventory} — что лежит в рыночном инвентаре на сайте (id для {@code /crystal inventory claim <id>}). */
+    private static int inventoryList(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            source.sendFailure(Component.literal("Только для игроков"));
+            return 0;
+        }
+        if (INVENTORY_LIST_RATE_LIMITER.isLimited(player.getUUID())) {
+            source.sendFailure(Component.translatable("crystalmod.check.rate_limited"));
+            return 0;
+        }
+        String username = player.getGameProfile().getName();
+        var server = player.getServer();
+        CrystalAPI.inventoryListAsync(username)
+                .thenAccept(result -> server.execute(() -> {
+                    if (!result.get("ok").getAsBoolean()) {
+                        player.sendSystemMessage(Component.translatable("crystalmod.inventory.failed",
+                                result.has("error") ? result.get("error").getAsString() : "?").withStyle(ChatFormatting.RED));
+                        return;
+                    }
+                    var items = result.getAsJsonArray("items");
+                    if (items.isEmpty()) {
+                        player.sendSystemMessage(Component.translatable("crystalmod.inventory.empty").withStyle(ChatFormatting.GRAY));
+                        return;
+                    }
+                    player.sendSystemMessage(Component.translatable("crystalmod.inventory.header").withStyle(ChatFormatting.AQUA));
+                    for (var el : items) {
+                        JsonObject it = el.getAsJsonObject();
+                        int id = it.get("id").getAsInt();
+                        int qty = it.get("quantity").getAsInt();
+                        String registryId = it.get("registry_id").getAsString();
+                        String data = it.has("item_data") && !it.get("item_data").isJsonNull() ? it.get("item_data").getAsString() : null;
+                        Component name = ItemDataCodec.decodeOrPlain(data, registryId, 1, player.registryAccess()).getHoverName();
+                        boolean claiming = "claiming".equals(it.get("status").getAsString());
+                        boolean vanilla = it.has("is_vanilla") && it.get("is_vanilla").getAsBoolean();
+                        StringBuilder tags = new StringBuilder(vanilla ? "ваниль" : "мод: " + it.get("source_mod").getAsString());
+                        if (it.has("season_name") && !it.get("season_name").isJsonNull()) tags.append(" | ").append(it.get("season_name").getAsString());
+                        if (it.has("server_name") && !it.get("server_name").isJsonNull() && !it.get("server_name").getAsString().isEmpty()) {
+                            tags.append(" | ").append(it.get("server_name").getAsString());
+                        }
+                        Component line = Component.literal("#" + id + " ").withStyle(ChatFormatting.YELLOW)
+                                .append(name.copy().withStyle(ChatFormatting.WHITE))
+                                .append(Component.literal(" ×" + qty).withStyle(ChatFormatting.WHITE))
+                                .append(Component.literal("  [" + tags + "]").withStyle(ChatFormatting.DARK_GRAY));
+                        if (claiming) {
+                            line = line.copy().append(Component.translatable("crystalmod.inventory.claiming_suffix").withStyle(ChatFormatting.YELLOW));
+                        } else {
+                            final Component base = line;
+                            line = base.copy().withStyle(st -> st.withClickEvent(
+                                    new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.SUGGEST_COMMAND, "/crystal inventory claim " + id)));
+                        }
+                        player.sendSystemMessage(line);
+                    }
+                    player.sendSystemMessage(Component.translatable("crystalmod.inventory.footer").withStyle(ChatFormatting.GRAY));
+                }))
+                .exceptionally(ex -> {
+                    server.execute(() -> player.sendSystemMessage(Component.translatable("crystalmod.atm.unreachable").withStyle(ChatFormatting.RED)));
+                    return null;
+                });
+        return 1;
+    }
+
+    /** {@code /crystal inventory claim <id> [кол-во]} — выдать предмет из рыночного инвентаря сайта в игру. */
+    private static int inventoryClaim(CommandContext<CommandSourceStack> ctx, int quantity) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            source.sendFailure(Component.literal("Только для игроков"));
+            return 0;
+        }
+        InventoryClaims.claimFromGame(player, IntegerArgumentType.getInteger(ctx, "id"), quantity);
+        return 1;
+    }
+
+    /** {@code crystal market claim <ник> <claim_id>} — вызывается сайтом по RCON (кнопка «В игру»); только op/консоль. */
+    private static int marketClaim(CommandContext<CommandSourceStack> ctx) {
+        String playerName = StringArgumentType.getString(ctx, "player");
+        String claimId = StringArgumentType.getString(ctx, "claim_id");
+        CommandSourceStack source = ctx.getSource();
+        InventoryClaims.claimFromSite(source.getServer(), playerName, claimId,
+                msg -> source.sendFailure(msg));
+        source.sendSuccess(() -> Component.literal("Выдача запущена: " + playerName), false);
+        return 1;
     }
 
     // ── /crystal deposit <amount> / /crystal withdraw <amount> ─────────────────

@@ -6,6 +6,7 @@ import ru.alex.crystalmod.net.BalanceResponsePayload;
 import ru.alex.crystalmod.net.CancelListingResultPayload;
 import ru.alex.crystalmod.net.MarketBrowseResponsePayload;
 import ru.alex.crystalmod.net.MarketBuyResultPayload;
+import ru.alex.crystalmod.net.MarketGroupedResponsePayload;
 import ru.alex.crystalmod.net.MyListingsResponsePayload;
 
 /** Обработчик пакетов сервер → клиент (см. {@link ru.alex.crystalmod.net.ServerPayloadHandler}). */
@@ -39,6 +40,14 @@ public final class ClientPayloadHandler {
         ctx.enqueueWork(() -> {
             if (Minecraft.getInstance().screen instanceof MarketBrowseScreen screen) {
                 screen.applyResults(payload.rows(), payload.total(), payload.page(), payload.perPage());
+            }
+        });
+    }
+
+    public static void handleMarketGroupedResponse(MarketGroupedResponsePayload payload, IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (Minecraft.getInstance().screen instanceof MarketBrowseScreen screen) {
+                screen.applyGroups(payload.rows(), payload.total(), payload.page(), payload.perPage());
             }
         });
     }

@@ -12,6 +12,8 @@ import net.minecraft.world.item.ItemStack;
 import ru.alex.crystalmod.ItemDataCodec;
 import ru.alex.crystalmod.net.MarketBrowseRequestPayload;
 import ru.alex.crystalmod.net.MarketBuyPayload;
+import ru.alex.crystalmod.net.MarketGroupedRequestPayload;
+import ru.alex.crystalmod.net.MarketItemLotsRequestPayload;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,14 +25,27 @@ import java.util.List;
  * это и даёт «масштабируется под окно» без ручного драг-ресайза (в ванильном
  * Minecraft GUI такого вообще не существует, только окно/масштаб целиком).
  *
+ * <p>Три вида (как на сайте): {@link Mode#GROUPS} — по умолчанию, один предмет = одна строка («от X», всего штук, лотов),
+ * клик открывает {@link Mode#LOTS} — все лоты этого предмета от дешёвых; {@link Mode#LIST} — плоский список всех лотов.
+ * Выбранный вид (группы/список) запоминается до выхода из игры.
+ *
  * <p>Обычный {@code Screen}, не {@code AbstractContainerScreen}: строки —
  * не инвентарные слоты, а данные с сайта, отрисованные вручную.
  */
 public class MarketBrowseScreen extends Screen {
 
+    private enum Mode { GROUPS, LOTS, LIST }
+
+    // Что показывать при открытии терминала: группы по умолчанию (как на сайте), «список» — выбор игрока.
+    private static boolean preferGrouped = true;
+
     // stack хранит уже раскодированный ItemStack (зачарования/содержимое рюкзака-шалкера/т.п.,
     // см. ItemDataCodec) — декодируется один раз в applyResults(), не на каждый кадр render().
     private record Row(int id, ItemStack stack, int qty, int price, String seller) {
+    }
+
+    // Группа: один предмет по registry_id; иконка — «голый» предмет (лоты одной группы могут отличаться NBT).
+    private record Group(String registryId, ItemStack stack, int minPrice, int totalQty, int lots) {
     }
 
     private static final String[] SORT_MODES = {"newest", "price_asc", "price_desc", "qty_desc"};
@@ -45,10 +60,14 @@ public class MarketBrowseScreen extends Screen {
 
     private EditBox searchBox;
     private EditBox qtyBox;
+    private Mode mode = preferGrouped ? Mode.GROUPS : Mode.LIST;
+    private String lotsRegistry = null;
+    private Component lotsTitle = Component.empty();
     private int sortIndex = 0;
     private int page = 1;
     private int totalPages = 1;
     private List<Row> rows = List.of();
+    private List<Group> groups = List.of();
     private boolean loading = true;
     private boolean unreachable = false;
     private int scroll = 0;
@@ -56,6 +75,7 @@ public class MarketBrowseScreen extends Screen {
 
     private int panelLeft, panelTop, panelWidth, panelHeight, visibleRows;
     private Button sortButton;
+    private Button viewButton;
     private Button prevButton;
     private Button nextButton;
 
@@ -81,6 +101,7 @@ public class MarketBrowseScreen extends Screen {
 
         this.addRenderableWidget(Button.builder(Component.translatable("crystalmod.market_block.browse_search_button"),
                         b -> {
+                            leaveLots();
                             page = 1;
                             requestData();
                         })
@@ -93,7 +114,24 @@ public class MarketBrowseScreen extends Screen {
         qtyBox.setValue("1");
         this.addRenderableWidget(qtyBox);
 
+        viewButton = Button.builder(viewLabel(), b -> {
+                    if (mode == Mode.LOTS) {
+                        leaveLots();
+                    } else {
+                        mode = mode == Mode.GROUPS ? Mode.LIST : Mode.GROUPS;
+                        preferGrouped = mode == Mode.GROUPS;
+                    }
+                    page = 1;
+                    scroll = 0;
+                    viewButton.setMessage(viewLabel());
+                    requestData();
+                })
+                .bounds(panelLeft + 120, panelTop + 46, 120, 18)
+                .build();
+        this.addRenderableWidget(viewButton);
+
         sortButton = Button.builder(sortLabel(), b -> {
+                    leaveLots();
                     sortIndex = (sortIndex + 1) % SORT_MODES.length;
                     sortButton.setMessage(sortLabel());
                     page = 1;
@@ -143,15 +181,78 @@ public class MarketBrowseScreen extends Screen {
         return Component.translatable("crystalmod.market_block.sort." + SORT_MODES[sortIndex]);
     }
 
+    private Component viewLabel() {
+        return switch (mode) {
+            case GROUPS -> Component.translatable("crystalmod.market_block.view.groups");
+            case LIST -> Component.translatable("crystalmod.market_block.view.list");
+            case LOTS -> Component.translatable("crystalmod.market_block.view.back");
+        };
+    }
+
+    /** Выход из открытой группы обратно к списку групп (поиск/сортировка/«Назад к группам» всегда ведут в группы). */
+    private void leaveLots() {
+        if (mode == Mode.LOTS) {
+            mode = Mode.GROUPS;
+            lotsRegistry = null;
+            if (viewButton != null) viewButton.setMessage(viewLabel());
+        }
+    }
+
+    private void openLots(Group g) {
+        mode = Mode.LOTS;
+        lotsRegistry = g.registryId();
+        lotsTitle = g.stack().getHoverName();
+        page = 1;
+        scroll = 0;
+        viewButton.setMessage(viewLabel());
+        requestData();
+    }
+
+    private int itemCount() {
+        return mode == Mode.GROUPS ? groups.size() : rows.size();
+    }
+
     private void requestData() {
         loading = true;
         unreachable = false;
         String search = searchBox != null ? searchBox.getValue().trim() : "";
-        PacketDistributor.sendToServer(new MarketBrowseRequestPayload(search, SORT_MODES[sortIndex], page));
+        switch (mode) {
+            case GROUPS -> PacketDistributor.sendToServer(new MarketGroupedRequestPayload(search, SORT_MODES[sortIndex], page));
+            case LIST -> PacketDistributor.sendToServer(new MarketBrowseRequestPayload(search, SORT_MODES[sortIndex], page));
+            case LOTS -> PacketDistributor.sendToServer(new MarketItemLotsRequestPayload(lotsRegistry));
+        }
     }
 
-    /** Вызывается {@link ClientPayloadHandler} при получении ответа с сервера. */
+    /** Вызывается {@link ClientPayloadHandler} при получении сгруппированного каталога. */
+    public void applyGroups(List<String> packedRows, int total, int respPage, int perPage) {
+        if (mode != Mode.GROUPS) return; // запоздалый ответ: игрок уже переключил вид
+        loading = false;
+        if (packedRows.size() == 1 && "!error".equals(packedRows.get(0))) {
+            unreachable = true;
+            groups = List.of();
+            rebuildRowButtons();
+            return;
+        }
+        unreachable = false;
+        page = respPage;
+        totalPages = Math.max(1, (int) Math.ceil(total / (double) Math.max(1, perPage)));
+        scroll = 0;
+
+        var registries = Minecraft.getInstance().level.registryAccess();
+        List<Group> parsed = new ArrayList<>();
+        for (String r : packedRows) {
+            String[] f = r.split("\\|", -1);
+            if (f.length < 4) continue;
+            ItemStack stack = ItemDataCodec.decodeOrPlain(null, f[0], 1, registries);
+            parsed.add(new Group(f[0], stack, parseIntSafe(f[1]), parseIntSafe(f[2]), parseIntSafe(f[3])));
+        }
+        groups = parsed;
+        rebuildRowButtons();
+    }
+
+    /** Вызывается {@link ClientPayloadHandler} при получении ответа с сервера (плоский список или лоты одной группы). */
     public void applyResults(List<String> packedRows, int total, int respPage, int perPage) {
+        if (mode == Mode.GROUPS) return; // запоздалый ответ плоского каталога после переключения на группы
         loading = false;
         if (packedRows.size() == 1 && "!error".equals(packedRows.get(0))) {
             unreachable = true;
@@ -186,14 +287,24 @@ public class MarketBrowseScreen extends Screen {
     private void rebuildRowButtons() {
         for (Button b : rowButtons) this.removeWidget(b);
         rowButtons.clear();
-        if (prevButton != null) prevButton.active = page > 1;
-        if (nextButton != null) nextButton.active = page < totalPages;
+        if (prevButton != null) prevButton.active = page > 1 && mode != Mode.LOTS;
+        if (nextButton != null) nextButton.active = page < totalPages && mode != Mode.LOTS;
 
-        int visible = Math.min(visibleRows, rows.size() - scroll);
+        int visible = Math.min(visibleRows, itemCount() - scroll);
         for (int i = 0; i < visible; i++) {
-            Row row = rows.get(scroll + i);
             int rowY = panelTop + LIST_TOP_OFFSET + i * ROW_HEIGHT;
 
+            if (mode == Mode.GROUPS) {
+                Group group = groups.get(scroll + i);
+                Button openBtn = Button.builder(Component.translatable("crystalmod.market_block.group_open"), b -> openLots(group))
+                        .bounds(panelLeft + panelWidth - 60, rowY, 52, ROW_HEIGHT - 2)
+                        .build();
+                this.addRenderableWidget(openBtn);
+                rowButtons.add(openBtn);
+                continue;
+            }
+
+            Row row = rows.get(scroll + i);
             Button detailsBtn = Button.builder(Component.literal("i"), b -> this.minecraft.setScreen(new ItemDetailsScreen(row.stack(), this)))
                     .bounds(panelLeft + panelWidth - 88, rowY, 20, ROW_HEIGHT - 2)
                     .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("crystalmod.market_block.details_button")))
@@ -218,6 +329,7 @@ public class MarketBrowseScreen extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if ((keyCode == 257 || keyCode == 335) && this.getFocused() == searchBox) { // Enter / KP_Enter
+            leaveLots();
             page = 1;
             requestData();
             return true;
@@ -226,8 +338,24 @@ public class MarketBrowseScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        // В режиме групп открыть лоты можно кликом по любому месту строки, не только по кнопке «Лоты».
+        if (mode == Mode.GROUPS && button == 0 && !loading && !unreachable
+                && mouseX >= panelLeft + 6 && mouseX < panelLeft + panelWidth - 6) {
+            int idx = (int) ((mouseY - (panelTop + LIST_TOP_OFFSET)) / ROW_HEIGHT);
+            int visible = Math.min(visibleRows, groups.size() - scroll);
+            if (mouseY >= panelTop + LIST_TOP_OFFSET && idx >= 0 && idx < visible) {
+                openLots(groups.get(scroll + idx));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int maxScroll = Math.max(0, rows.size() - visibleRows);
+        int maxScroll = Math.max(0, itemCount() - visibleRows);
         int next = Math.clamp(scroll - (int) Math.signum(scrollY), 0, maxScroll);
         if (next != scroll) {
             scroll = next;
@@ -244,7 +372,10 @@ public class MarketBrowseScreen extends Screen {
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
-        guiGraphics.drawCenteredString(this.font, this.title, panelLeft + panelWidth / 2, panelTop + 8, 0xFFFFFF);
+        Component heading = mode == Mode.LOTS
+                ? Component.translatable("crystalmod.market_block.lots_title", lotsTitle)
+                : this.title;
+        guiGraphics.drawCenteredString(this.font, heading, panelLeft + panelWidth / 2, panelTop + 8, 0xFFFFFF);
         BalanceOverlay.render(guiGraphics, this.font, panelLeft + panelWidth / 2, panelTop - 20);
         guiGraphics.drawString(this.font, Component.translatable("crystalmod.market_block.browse_qty_label"),
                 panelLeft + 8, panelTop + 51, 0xCCCCCC);
@@ -259,17 +390,33 @@ public class MarketBrowseScreen extends Screen {
         } else if (unreachable) {
             guiGraphics.drawCenteredString(this.font, Component.translatable("crystalmod.market_block.browse_unreachable"),
                     panelLeft + panelWidth / 2, panelTop + panelHeight / 2, 0xFF5555);
-        } else if (rows.isEmpty()) {
+        } else if (itemCount() == 0) {
             guiGraphics.drawCenteredString(this.font, Component.translatable("crystalmod.market_block.browse_empty"),
                     panelLeft + panelWidth / 2, panelTop + panelHeight / 2, 0xAAAAAA);
         } else {
-            int visible = Math.min(visibleRows, rows.size() - scroll);
+            int visible = Math.min(visibleRows, itemCount() - scroll);
             for (int i = 0; i < visible; i++) {
-                Row row = rows.get(scroll + i);
                 int rowY = panelTop + LIST_TOP_OFFSET + i * ROW_HEIGHT;
                 guiGraphics.fill(panelLeft + 6, rowY, panelLeft + panelWidth - 6, rowY + ROW_HEIGHT - 2,
                         (i % 2 == 0) ? 0x30303050 : 0x20202038);
 
+                if (mode == Mode.GROUPS) {
+                    Group g = groups.get(scroll + i);
+                    guiGraphics.renderItem(g.stack(), panelLeft + 8, rowY + 1);
+                    if (mouseX >= panelLeft + 8 && mouseX < panelLeft + 26 && mouseY >= rowY + 1 && mouseY < rowY + 19) {
+                        hovered = g.stack();
+                    }
+                    Component line = g.stack().getHoverName().copy()
+                            .append("  ")
+                            .append(Component.translatable("crystalmod.market_block.group_from", g.minPrice()).withStyle(ChatFormatting.AQUA));
+                    guiGraphics.drawString(this.font, line, panelLeft + 28, rowY + 2, 0xFFFFFF);
+                    guiGraphics.drawString(this.font,
+                            Component.translatable("crystalmod.market_block.group_stock", g.totalQty(), g.lots()).withStyle(ChatFormatting.GRAY),
+                            panelLeft + 28, rowY + 11, 0x888888);
+                    continue;
+                }
+
+                Row row = rows.get(scroll + i);
                 ItemStack stack = row.stack();
                 guiGraphics.renderItem(stack, panelLeft + 8, rowY + 1);
                 if (mouseX >= panelLeft + 8 && mouseX < panelLeft + 26 && mouseY >= rowY + 1 && mouseY < rowY + 19) {
