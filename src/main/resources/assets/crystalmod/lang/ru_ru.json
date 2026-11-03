@@ -111,5 +111,19 @@
   "crystalmod.stall.cancelled": "Покупка отменена до выдачи. Хрусталики возвращены.",
   "crystalmod.stall.changed": "Предложение изменилось. Откройте прилавок заново и проверьте условия.",
   "crystalmod.stall.success_label": "Покупка завершена!",
-  "crystalmod.stall.unsupported": "Прилавок пока принимает обычные предметы без имени, чар и содержимого контейнеров."
+  "crystalmod.stall.unsupported": "Прилавок пока принимает обычные предметы без имени, чар и содержимого контейнеров.",
+  "crystalmod.stall.price_input": "Цена",
+  "crystalmod.stall.refresh": "Обновить",
+  "crystalmod.stall.per_party": "За партию",
+  "crystalmod.stall.per_unit": "За штуку",
+  "crystalmod.stall.unit_hint": "Цена за штуку — целое число хрусталиков. Для дешёвых ресурсов используйте цену партии.",
+  "crystalmod.stall.save": "Сохранить",
+  "crystalmod.stall.saved": "Условия сохранены",
+  "crystalmod.stall.offer_preview": "Итого: %s хруст. за %s шт.",
+  "crystalmod.stall.invalid_offer": "Цена 1–30000, партия 1–64.",
+  "crystalmod.stall.shop_limit": "Слишком часто. Подождите минуту.",
+  "crystalmod.stall.shop_unavailable": "Сайт магазинов недоступен. Попробуйте позже.",
+  "crystalmod.stall.shop_submitted": "Магазин #%s отправлен на проверку. Оформление можно дополнить на сайте.",
+  "crystalmod.stall.shop_linked": "Привязка прилавка обновлена. Торговля работает независимо от регистрации.",
+  "crystalmod.stall.shop_look": "Посмотрите на свой настроенный прилавок (не дальше 6 блоков)."
 }

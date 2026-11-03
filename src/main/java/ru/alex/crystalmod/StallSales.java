@@ -119,6 +119,7 @@ final class StallSales {
                 // Chained reserve -> commit/refund keeps the same stall locked until the last response.
                 if (!action.equals("reserve") || !(op.phase.equals("delivered") || op.phase.equals("refunding"))) {
                     ACTIVE.remove(stall.stallId); menu.data.set(4,0); menu.refresh(); menu.broadcastChanges();
+                    if(menu.stall()==stall)StallShops.publish(stall);
                 }
             }
         }));

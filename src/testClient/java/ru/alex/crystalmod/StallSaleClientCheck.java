@@ -25,7 +25,9 @@ public final class StallSaleClientCheck {
     private static int ticks, age, doneTicks;
     private static boolean requested, setup, configured, bought, checked;
     private static volatile boolean refunded;
-    private static String saleTx;
+    private static String saleTx, refillTx;
+    private static volatile int refillStage;
+    private static boolean partyConfigured;
     private static volatile boolean sceneReady, done, failed;
     private static final BlockPos POS=new BlockPos(0,-59,0);
     private static void require(boolean value,String what) {
@@ -35,6 +37,15 @@ public final class StallSaleClientCheck {
     private static void shot(Minecraft mc,String name) {
         Screenshot.grab(mc.gameDirectory,name+".png",mc.getMainRenderTarget(),m->CrystalMod.LOGGER.info("STALLSALE screenshot {}",name));
     }
+    private static void click(Minecraft mc,String key){
+        String label=Component.translatable(key).getString();
+        for(var child:mc.screen.children()) if(child instanceof net.minecraft.client.gui.components.Button b && b.getMessage().getString().equals(label)){b.onPress();return;}
+        throw new AssertionError("Missing button "+key);
+    }
+    private static void fields(Minecraft mc,String price,String quantity){
+        var fields=mc.screen.children().stream().filter(c->c instanceof net.minecraft.client.gui.components.EditBox).map(c->(net.minecraft.client.gui.components.EditBox)c).toList();
+        fields.get(0).setValue(price);fields.get(1).setValue(quantity);
+    }
     private interface CheckedAction { void run() throws Exception; }
     private static void server(Minecraft mc,CheckedAction action) {
         mc.getSingleplayerServer().execute(()->{
@@ -42,6 +53,7 @@ public final class StallSaleClientCheck {
             catch(Throwable e) { failed=true;CrystalMod.LOGGER.error("STALLSALE RESULT: FAIL",e);mc.execute(mc::stop); }
         });
     }
+    private static boolean refilledDue(){return refillStage>=2 && refillStage<6 && age%10==0;}
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
         if(!Boolean.getBoolean("crystalmod.stallSaleTest")) return;
         var mc=Minecraft.getInstance();
@@ -80,6 +92,20 @@ public final class StallSaleClientCheck {
                 level.setBlockAndUpdate(new BlockPos(0,-60,3),Blocks.STONE.defaultBlockState());
                 player.setYRot(180);player.setXRot(10);player.teleportTo(0.5,-59,3.5);
                 level.setDayTime(6000);
+                require(block.getTicker(level,state,CrystalItems.MARKET_STALL_ENTITY.get())==null,"shop integration adds no block ticker");
+                require(!tschipp.carryon.common.config.ListHandler.isPermitted(block),"Carry On still refuses the stall");
+                var commandPos=POS.east(2);
+                level.setBlockAndUpdate(commandPos.below(),Blocks.BARREL.defaultBlockState());
+                level.setBlockAndUpdate(commandPos,state);block.setPlacedBy(level,commandPos,state,player,new ItemStack(CrystalItems.MARKET_STALL_ITEM.get()));
+                var commandStall=(MarketStallEntity)level.getBlockEntity(commandPos);commandStall.sample=new ItemStack(Items.COPPER_INGOT);commandStall.setChanged();
+                player.teleportTo(2.5,-56,0.5);player.setXRot(90);player.setYRot(180);
+                CrystalMod.LOGGER.info("STALLSALE AIM eye={} view={} hit={}",player.getEyePosition(),player.getViewVector(1),player.pick(6,1,false).getLocation());
+                var commands=player.getServer().getCommands();
+                require(commands.getDispatcher().execute("crystal shop apply \"Harness Workshop "+System.currentTimeMillis()+"\" Create components",player.createCommandSourceStack())==1,"shop registration command accepts a quoted name");
+                require(commands.getDispatcher().execute("crystal shop list",player.createCommandSourceStack())==1,"shop list command dispatches");
+                require(commands.getDispatcher().execute("crystal shop link 1",player.createCommandSourceStack())==1,"shop link command targets the owner's configured stall");
+                CrystalMod.LOGGER.info("STALLSALE COMMAND STALL {}",commandStall.stallId);
+                player.teleportTo(0.5,-59,3.5);player.setXRot(10);
                 sceneReady=true;
             });
         }
@@ -93,14 +119,22 @@ public final class StallSaleClientCheck {
         });
         if(!configured && age>80 && mc.player.containerMenu instanceof MarketStallMenu) {
             configured=true;
-            mc.gameMode.handleInventoryButtonClick(mc.player.containerMenu.containerId,4);
-            mc.gameMode.handleInventoryButtonClick(mc.player.containerMenu.containerId,1);
-            mc.gameMode.handleInventoryButtonClick(mc.player.containerMenu.containerId,6);
+            fields(mc,"24","8");click(mc,"crystalmod.stall.per_party");
+            click(mc,"crystalmod.stall.save");
+        }
+        if(age==95){shot(mc,"market-06-unit-price");server(mc,()->{
+            var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var menu=(MarketStallMenu)p.containerMenu;var s=menu.stall();
+            require(s.price==24 && s.partySize==8,"numeric unit price 3 times 8 saves party total 24 through real screen and payload");
+            require(!menu.configure(p,Integer.MAX_VALUE,64,true) && s.price==24,"overflowing unit-price payload is rejected");
+            require(!menu.configure(p,10,0,false) && s.partySize==8,"zero-sized party is rejected");
+        });}
+        if(age>=100 && !partyConfigured && mc.screen instanceof ru.alex.crystalmod.client.MarketStallScreen){
+            partyConfigured=true;click(mc,"crystalmod.stall.per_unit");fields(mc,"10","8");click(mc,"crystalmod.stall.save");
         }
         if(age==120) {shot(mc,"market-02-owner");server(mc,()->{
             var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
             var s=(MarketStallEntity)p.level().getBlockEntity(POS);
-            require(s.price==10 && s.partySize==8,"owner configures party of 8 for 10 using menu packets");
+            require(s.price==10 && s.partySize==8,"owner enters party of 8 for 10 through real numeric fields");
             p.closeContainer();
             s.owner=UUID.fromString("2429cce2-fd10-4367-abaa-f14545bac013");s.ownerName="MarketSeller";s.setChanged();
             xaero.pac.common.server.api.OpenPACServerAPI.get(p.getServer()).getServerClaimsManager()
@@ -171,7 +205,35 @@ public final class StallSaleClientCheck {
                 require(count==8,"cancelled second purchase gives no extra items");
                 refunded=true;CrystalMod.LOGGER.info("STALLSALE REFUND PASS tx={}",op.txId);
             });
-            if(refunded) mc.stop();
+            if(refunded && refillStage==0) {refillStage=1;server(mc,()->{
+                var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var level=p.serverLevel();var s=(MarketStallEntity)level.getBlockEntity(POS);
+                ((net.minecraft.world.Container)level.getBlockEntity(POS.below())).clearContent();
+                p.openMenu(new net.minecraft.world.SimpleMenuProvider((id,inv,x)->new MarketStallMenu(id,inv,POS),Component.literal("Refill check")),POS);
+                var previous=StallJournal.read(p.getServer(),s).txId;
+                ((MarketStallMenu)p.containerMenu).clickMenuButton(p,0);
+                require(StallJournal.read(p.getServer(),s).txId.equals(previous),"empty stock rejects purchase without starting payment");
+                var feed=POS.below().east();
+                level.setBlockAndUpdate(feed,Blocks.HOPPER.defaultBlockState().setValue(net.minecraft.world.level.block.HopperBlock.FACING,Direction.WEST));
+                ((net.minecraft.world.Container)level.getBlockEntity(feed)).setItem(0,new ItemStack(Items.IRON_INGOT,16));
+                refillTx=previous;refillStage=2;
+            });}
+            if(refilledDue())server(mc,()->{
+                var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var s=(MarketStallEntity)p.level().getBlockEntity(POS);var menu=(MarketStallMenu)p.containerMenu;
+                var op=StallJournal.read(p.getServer(),s);
+                if(refillStage==3 && op.phase.equals("complete") && !op.txId.equals(refillTx)){
+                    refillTx=op.txId;refillStage=4;
+                }
+                if((refillStage==2 || refillStage==4) && MarketStallMenu.stock(s)>=8){
+                    menu.clickMenuButton(p,9);require(menu.data.get(2)>=8,"refresh sees live hopper replenishment");
+                    menu.clickMenuButton(p,0);refillStage=refillStage==2?3:5;
+                }else if(refillStage==5 && op.phase.equals("complete") && !op.txId.equals(refillTx)){
+                    int count=0;for(int i=0;i<36;i++)if(p.getInventory().getItem(i).is(Items.IRON_INGOT))count+=p.getInventory().getItem(i).getCount();
+                    require(count==24 && MarketStallMenu.stock(s)==0,"two automatically replenished batches deliver exactly 16 additional ingots");
+                    require(((net.minecraft.world.Container)p.level().getBlockEntity(POS.below().east())).isEmpty(),"hopper really transferred the stock into the barrel");
+                    refillStage=6;CrystalMod.LOGGER.info("STALLSALE REFILL PASS tx={}",op.txId);
+                }
+            });
+            if(refillStage==6) mc.stop();
         }
         if(age>1200) {failed=true;CrystalMod.LOGGER.error("STALLSALE RESULT: FAIL timeout");mc.stop();}
     }

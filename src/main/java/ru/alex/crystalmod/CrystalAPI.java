@@ -92,6 +92,19 @@ public class CrystalAPI {
         return java.util.UUID.randomUUID().toString();
     }
 
+    public static CompletableFuture<JsonObject> shopRequestAsync(String action,JsonObject body){
+        return supply("shop_"+action,()->{
+            String url=ConfigManager.CONFIG.apiBaseUrl.replaceAll("/+$", "")+"/crystal_shops_api.php?action="+action;
+            var response=PhpApiClient.postJson(url,ConfigManager.CONFIG.apiSecret,body.toString());
+            if(response.statusCode()!=200 && response.statusCode()!=400)throw new IOException("Shop HTTP "+response.statusCode());
+            JsonObject json;
+            try{json=GSON.fromJson(response.body(),JsonObject.class);}catch(RuntimeException e){throw new IOException("Invalid shop response",e);}
+            if(json==null || !json.has("ok"))throw new IOException("Missing shop response");
+            if(!json.get("ok").getAsBoolean())return json;
+            JsonObject data=json.getAsJsonObject("data");if(data==null)throw new IOException("Missing shop data");data.addProperty("ok",true);return data;
+        });
+    }
+
     static CompletableFuture<JsonObject> stallPaymentAsync(String action, String stallId, StallJournal.Operation op) {
         return supply("stall_"+action, () -> {
             JsonObject body=new JsonObject();

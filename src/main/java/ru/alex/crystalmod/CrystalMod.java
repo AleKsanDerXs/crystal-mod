@@ -59,7 +59,7 @@ public class CrystalMod {
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1");
+        PayloadRegistrar registrar = event.registrar("2");
         // Обязательный (не .optional()) канал — заставляет NeoForge требовать мод на обеих сторонах.
         registrar.playBidirectional(
                 CrystalHandshakePayload.TYPE,
@@ -69,6 +69,11 @@ public class CrystalMod {
                         (payload, context) -> { /* no-op */ }
                 )
         );
+        registrar.playToServer(ru.alex.crystalmod.net.StallConfigurePayload.TYPE,ru.alex.crystalmod.net.StallConfigurePayload.STREAM_CODEC,(payload,ctx)->ctx.enqueueWork(()->{
+            if(ctx.player() instanceof net.minecraft.server.level.ServerPlayer player
+                    && player.containerMenu instanceof MarketStallMenu menu && menu.containerId==payload.containerId())
+                menu.configure(player,payload.price(),payload.quantity(),payload.perUnit());
+        }));
         registrar.playToServer(AtmDepositPayload.TYPE, AtmDepositPayload.STREAM_CODEC, ServerPayloadHandler::handleAtmDeposit);
         registrar.playToServer(AtmWithdrawPayload.TYPE, AtmWithdrawPayload.STREAM_CODEC, ServerPayloadHandler::handleAtmWithdraw);
         registrar.playToServer(ListItemPayload.TYPE, ListItemPayload.STREAM_CODEC, ServerPayloadHandler::handleListItem);

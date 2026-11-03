@@ -80,6 +80,7 @@ public final class CrystalCommands {
                 // Корень БЕЗ requires — /crystal check должна остаться доступна всем игрокам;
                 // ограничение на права стоит точечно на give/market/deposit/withdraw, а не на всём дереве.
                 Commands.literal("crystal")
+                        .then(StallShops.commands())
                         .then(Commands.literal("give")
                                 .requires(source -> source.hasPermission(2))
                                 .then(Commands.argument("player", StringArgumentType.word())

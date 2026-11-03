@@ -111,5 +111,19 @@
   "crystalmod.stall.cancelled": "Purchase cancelled before delivery. Crystals refunded.",
   "crystalmod.stall.changed": "The offer changed. Reopen the stall and check the terms.",
   "crystalmod.stall.success_label": "Purchase complete!",
-  "crystalmod.stall.unsupported": "Stalls currently support plain items without custom names, enchantments or container contents."
+  "crystalmod.stall.unsupported": "Stalls currently support plain items without custom names, enchantments or container contents.",
+  "crystalmod.stall.price_input": "Price",
+  "crystalmod.stall.refresh": "Refresh",
+  "crystalmod.stall.per_party": "Per party",
+  "crystalmod.stall.per_unit": "Per item",
+  "crystalmod.stall.unit_hint": "Unit prices use whole crystals. Use a party price for cheap resources.",
+  "crystalmod.stall.save": "Save",
+  "crystalmod.stall.saved": "Offer saved",
+  "crystalmod.stall.offer_preview": "Total: %s crystals for %s items",
+  "crystalmod.stall.invalid_offer": "Price 1–30000, party 1–64.",
+  "crystalmod.stall.shop_limit": "Too many requests. Wait a minute.",
+  "crystalmod.stall.shop_unavailable": "Shop service unavailable. Please retry later.",
+  "crystalmod.stall.shop_submitted": "Shop #%s submitted for review. Edit its profile on the website.",
+  "crystalmod.stall.shop_linked": "Stall link updated. Trading does not require registration.",
+  "crystalmod.stall.shop_look": "Look at your configured stall within 6 blocks."
 }

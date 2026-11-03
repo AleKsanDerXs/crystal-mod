@@ -9,7 +9,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.*;
 import net.minecraft.world.item.ItemStack;
 
-/** Only vanilla menu buttons cross the network; the server owns price, quantity and stock. */
+/** Buttons and validated configuration payloads; the server owns price, quantity and stock. */
 public class MarketStallMenu extends AbstractContainerMenu {
     public final BlockPos pos;
     public final Inventory inventory;
@@ -22,6 +22,7 @@ public class MarketStallMenu extends AbstractContainerMenu {
         offeredSample=stall()==null?ItemStack.EMPTY:stall().sample.copy();
         addDataSlots(data);
         refresh();
+        if(!inventory.player.level().isClientSide && stall()!=null)StallShops.publish(stall());
     }
     public MarketStallEntity stall() {
         return inventory.player.level().getBlockEntity(pos) instanceof MarketStallEntity s ? s : null;
@@ -55,21 +56,17 @@ public class MarketStallMenu extends AbstractContainerMenu {
         MarketStallEntity s = stall();
         if (s == null) return false;
         if (button == 0) { StallSales.buy(sp, this); return true; }
-        if (!player.getUUID().equals(s.owner) || !StallSales.canEdit(s)
-                || (net.neoforged.fml.ModList.get().isLoaded("openpartiesandclaims") && !StallClaimsCompat.canConfigure(sp,pos))) return false;
-        switch (button) {
-            case 1 -> s.price = Math.max(1, s.price - 1);
-            case 2 -> s.price = Math.min(30000, s.price + 1);
-            case 3 -> s.price = Math.max(1, s.price - 10);
-            case 4 -> s.price = Math.min(30000, s.price + 10);
-            case 5 -> s.partySize = 1;
-            case 6 -> s.partySize = 8;
-            case 7 -> s.partySize = 32;
-            case 8 -> s.partySize = 64;
-            default -> { return false; }
-        }
-        s.setChanged(); refresh(); broadcastChanges();
-        return true;
+        if(button==9){refresh();broadcastChanges();StallShops.publish(s);return true;}
+        return false;
+    }
+    public boolean configure(ServerPlayer player,int price,int quantity,boolean perUnit){
+        MarketStallEntity s=stall();
+        if(s==null || !stillValid(player) || !player.getUUID().equals(s.owner) || !StallSales.canEdit(s)
+                || (net.neoforged.fml.ModList.get().isLoaded("openpartiesandclaims") && !StallClaimsCompat.canConfigure(player,pos)))return false;
+        long total=perUnit?(long)price*quantity:price;
+        if(price<1 || quantity<1 || quantity>64 || total<1 || total>30000){message(player,"invalid_offer");return false;}
+        if(s.price!=(int)total || s.partySize!=quantity){s.price=(int)total;s.partySize=quantity;s.setChanged();StallShops.publish(s);}
+        data.set(5,3);refresh();broadcastChanges();return true;
     }
     void message(ServerPlayer player, String key) { player.sendSystemMessage(Component.translatable("crystalmod.stall." + key)); }
 }

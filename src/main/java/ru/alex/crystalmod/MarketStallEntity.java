@@ -14,6 +14,7 @@ public class MarketStallEntity extends BlockEntity {
     String ownerName = "";
     UUID stallId = UUID.randomUUID();
     int price = 1, partySize = 1;
+    long lastCatalogPublish;
     public ItemStack sample = ItemStack.EMPTY;
     public MarketStallEntity(BlockPos pos, BlockState state) { super(CrystalItems.MARKET_STALL_ENTITY.get(), pos, state); }
     @Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {

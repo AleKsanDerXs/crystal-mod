@@ -33,6 +33,10 @@ public class MarketStallBlock extends BaseEntityBlock {
             stall.setChanged();
         }
     }
+    @Override protected void onRemove(BlockState state,Level level,BlockPos pos,BlockState next,boolean moving){
+        if(!level.isClientSide && !state.is(next.getBlock()) && level.getBlockEntity(pos) instanceof MarketStallEntity stall)StallShops.removed(stall);
+        super.onRemove(state,level,pos,next,moving);
+    }
     @Override protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         // Sneaking is reserved for Carry On / other tools. Never configure through that gesture.
         if (player.isShiftKeyDown()) return InteractionResult.PASS;
