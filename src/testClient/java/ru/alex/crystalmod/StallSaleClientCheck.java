@@ -69,7 +69,7 @@ public final class StallSaleClientCheck {
             return;
         }
         if(mc.player==null || mc.getSingleplayerServer()==null || failed) return;
-        mc.player.setYRot(180);mc.player.setXRot(10);
+        mc.player.setYRot(StallCreateCheck.ENABLED && refillStage==6?145:180);mc.player.setXRot(StallCreateCheck.ENABLED && refillStage==6?25:10);
         if(!setup) {
             setup=true;mc.setScreen(null);
             server(mc,()->{
@@ -212,29 +212,35 @@ public final class StallSaleClientCheck {
                 var previous=StallJournal.read(p.getServer(),s).txId;
                 ((MarketStallMenu)p.containerMenu).clickMenuButton(p,0);
                 require(StallJournal.read(p.getServer(),s).txId.equals(previous),"empty stock rejects purchase without starting payment");
-                var feed=POS.below().east();
-                level.setBlockAndUpdate(feed,Blocks.HOPPER.defaultBlockState().setValue(net.minecraft.world.level.block.HopperBlock.FACING,Direction.WEST));
-                ((net.minecraft.world.Container)level.getBlockEntity(feed)).setItem(0,new ItemStack(Items.IRON_INGOT,16));
+                if(StallCreateCheck.ENABLED)StallCreateCheck.install(level,POS);
+                else{
+                    var feed=POS.below().east();
+                    level.setBlockAndUpdate(feed,Blocks.HOPPER.defaultBlockState().setValue(net.minecraft.world.level.block.HopperBlock.FACING,Direction.WEST));
+                    ((net.minecraft.world.Container)level.getBlockEntity(feed)).setItem(0,new ItemStack(Items.IRON_INGOT,16));
+                }
                 refillTx=previous;refillStage=2;
             });}
             if(refilledDue())server(mc,()->{
                 var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var s=(MarketStallEntity)p.level().getBlockEntity(POS);var menu=(MarketStallMenu)p.containerMenu;
                 var op=StallJournal.read(p.getServer(),s);
+                if(StallCreateCheck.ENABLED)StallCreateCheck.observe(s,menu);
                 if(refillStage==3 && op.phase.equals("complete") && !op.txId.equals(refillTx)){
                     refillTx=op.txId;refillStage=4;
                 }
                 if((refillStage==2 || refillStage==4) && MarketStallMenu.stock(s)>=8){
-                    menu.clickMenuButton(p,9);require(menu.data.get(2)>=8,"refresh sees live hopper replenishment");
+                    menu.clickMenuButton(p,9);require(menu.data.get(2)>=8,"refresh sees automatic stock replenishment");
+                    if(StallCreateCheck.ENABLED)StallCreateCheck.beforeBuy(s);
                     menu.clickMenuButton(p,0);refillStage=refillStage==2?3:5;
                 }else if(refillStage==5 && op.phase.equals("complete") && !op.txId.equals(refillTx)){
                     int count=0;for(int i=0;i<36;i++)if(p.getInventory().getItem(i).is(Items.IRON_INGOT))count+=p.getInventory().getItem(i).getCount();
                     require(count==24 && MarketStallMenu.stock(s)==0,"two automatically replenished batches deliver exactly 16 additional ingots");
-                    require(((net.minecraft.world.Container)p.level().getBlockEntity(POS.below().east())).isEmpty(),"hopper really transferred the stock into the barrel");
+                    if(StallCreateCheck.ENABLED)StallCreateCheck.drained(p.serverLevel());
+                    else require(((net.minecraft.world.Container)p.level().getBlockEntity(POS.below().east())).isEmpty(),"hopper really transferred the stock into the barrel");
                     refillStage=6;CrystalMod.LOGGER.info("STALLSALE REFILL PASS tx={}",op.txId);
                 }
             });
-            if(refillStage==6) mc.stop();
+            if(refillStage==6){if(StallCreateCheck.ENABLED)StallCreateCheck.tick(mc);else mc.stop();}
         }
-        if(age>1200) {failed=true;CrystalMod.LOGGER.error("STALLSALE RESULT: FAIL timeout");mc.stop();}
+        if(age>(StallCreateCheck.ENABLED?3600:1200)) {failed=true;CrystalMod.LOGGER.error("STALLSALE RESULT: FAIL timeout");mc.stop();}
     }
 }
