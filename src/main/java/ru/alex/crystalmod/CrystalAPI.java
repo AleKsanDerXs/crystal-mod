@@ -15,7 +15,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 /**
  * Клиент {@code crystals_api.php?action=deposit} — та же схема, что у
@@ -28,11 +29,18 @@ public class CrystalAPI {
 
     // Тот же принцип, что и AuthAPI-Async в auth-mod: отдельный пул для блокирующих HTTP-вызовов,
     // инициированных игровыми событиями (в нашем случае — ПКМ по банкноте).
-    private static final ExecutorService ASYNC_EXECUTOR = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "CrystalAPI-Async");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final ExecutorService ASYNC_EXECUTOR=pool("CrystalAPI",4,64);
+    private static final ExecutorService PAYMENTS=pool("CrystalStall-Payments",4,64);
+    private static final ExecutorService CATALOGUE=pool("CrystalStall-Catalogue",2,32);
+    private static ExecutorService pool(String name,int threads,int queued){
+        var pool=new ThreadPoolExecutor(threads,threads,60,TimeUnit.SECONDS,new ArrayBlockingQueue<>(queued),r->{
+            Thread t=new Thread(r,name);t.setDaemon(true);return t;
+        },new ThreadPoolExecutor.AbortPolicy());pool.allowCoreThreadTimeOut(true);return pool;
+    }
+    private static <T> CompletableFuture<T> async(Executor executor,Supplier<T> work){
+        try{return CompletableFuture.supplyAsync(work,executor);}
+        catch(RejectedExecutionException e){return CompletableFuture.failedFuture(e);}
+    }
 
     private static class PhpApiClient {
         private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
@@ -93,7 +101,7 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> shopRequestAsync(String action,JsonObject body){
-        return supply("shop_"+action,()->{
+        return supply(CATALOGUE,"shop_"+action,()->{
             String url=ConfigManager.CONFIG.apiBaseUrl.replaceAll("/+$", "")+"/crystal_shops_api.php?action="+action;
             var response=PhpApiClient.postJson(url,ConfigManager.CONFIG.apiSecret,body.toString());
             if(response.statusCode()!=200 && response.statusCode()!=400)throw new IOException("Shop HTTP "+response.statusCode());
@@ -106,7 +114,7 @@ public class CrystalAPI {
     }
 
     static CompletableFuture<JsonObject> stallPaymentAsync(String action, String stallId, StallJournal.Operation op) {
-        return supply("stall_"+action, () -> {
+        return supply(PAYMENTS,"stall_"+action, () -> {
             JsonObject body=new JsonObject();
             body.addProperty("tx_id",op.txId); body.addProperty("stall_id",stallId);
             body.addProperty("buyer",op.buyer); body.addProperty("seller",op.seller);
@@ -167,14 +175,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> atmDepositAsync(String txId, String username, List<CrystalNoteContents> notes, int targetAmount) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return atmDeposit(txId, username, notes, targetAmount);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при atm_deposit tx={} ({})", txId, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Банкомат: снять (списание с баланса + минт банкнот напрямую) ───────────
@@ -215,14 +223,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> atmWithdrawAsync(String txId, String username, int amount) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return atmWithdraw(txId, username, amount);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при atm_withdraw tx={} ({})", txId, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Проверка подлинности банкноты (/crystal check) ──────────────────────────
@@ -250,14 +258,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> verifyNoteAsync(String serial, int value) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return verifyNote(serial, value);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при verify_note serial={} ({})", serial, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Баланс (мини-плашка над окнами) ─────────────────────────────────────────
@@ -284,14 +292,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> balanceAsync(String username) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return balance(username);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при balance_mod username={} ({})", username, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Прямое выставление лота (блок рынка / op-команда из сундука) ───────────
@@ -330,14 +338,14 @@ public class CrystalAPI {
 
     public static CompletableFuture<JsonObject> createListingDirectAsync(String txId, String username, String registryId, int quantity,
             int pricePerUnit, String itemData, List<String> tooltipLines) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return createListingDirect(txId, username, registryId, quantity, pricePerUnit, itemData, tooltipLines);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при create_listing_direct tx={} ({})", txId, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Мои лоты (кнопка «Мои лоты» в торговом терминале) ───────────────────────
@@ -364,14 +372,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> myListingsAsync(String username) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return myListings(username);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при my_listings_mod username={} ({})", username, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Каталог рынка (торговый терминал — просмотр/покупка) ────────────────────
@@ -400,14 +408,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> marketListAsync(String search, String sort, int page, int perPage) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return marketList(search, sort, page, perPage);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при list_mod ({})", e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     /**
@@ -443,14 +451,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> buyListingAsync(String txId, String username, int listingId, int quantity) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return buyListing(txId, username, listingId, quantity);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при buy_mod tx={} ({})", txId, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     /**
@@ -482,14 +490,14 @@ public class CrystalAPI {
     }
 
     public static CompletableFuture<JsonObject> cancelListingAsync(String username, int listingId) {
-        return CompletableFuture.supplyAsync(() -> {
+        return async(ASYNC_EXECUTOR,() -> {
             try {
                 return cancelListing(username, listingId);
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при cancel_listing_mod id={} ({})", listingId, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     // ── Общие помощники для новых методов ─────────────────────────────────────
@@ -499,15 +507,17 @@ public class CrystalAPI {
         JsonObject call() throws IOException, InterruptedException;
     }
 
-    private static CompletableFuture<JsonObject> supply(String what, IoCall call) {
-        return CompletableFuture.supplyAsync(() -> {
+    private static CompletableFuture<JsonObject> supply(String what, IoCall call) {return supply(ASYNC_EXECUTOR,what,call);}
+
+    private static CompletableFuture<JsonObject> supply(Executor executor,String what, IoCall call) {
+        return async(executor,() -> {
             try {
                 return call.call();
             } catch (IOException | InterruptedException e) {
                 LOGGER.warn("CrystalAPI: сайт недоступен при {} ({})", what, e.getMessage());
                 throw new java.util.concurrent.CompletionException(e);
             }
-        }, ASYNC_EXECUTOR);
+        });
     }
 
     private static String enc(String s) {

@@ -125,5 +125,8 @@
   "crystalmod.stall.shop_unavailable": "Сайт магазинов недоступен. Попробуйте позже.",
   "crystalmod.stall.shop_submitted": "Магазин #%s отправлен на проверку. Оформление можно дополнить на сайте.",
   "crystalmod.stall.shop_linked": "Привязка прилавка обновлена. Торговля работает независимо от регистрации.",
-  "crystalmod.stall.shop_look": "Посмотрите на свой настроенный прилавок (не дальше 6 блоков)."
+  "crystalmod.stall.shop_look": "Посмотрите на свой настроенный прилавок (не дальше 6 блоков).",
+  "crystalmod.stall.shops": "Магазины",
+  "crystalmod.stall.choose_item": "Выбрать товар",
+  "crystalmod.stall.loading": "Загружается журнал прилавка. Повторите через секунду."
 }

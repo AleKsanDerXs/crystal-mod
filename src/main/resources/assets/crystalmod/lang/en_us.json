@@ -125,5 +125,8 @@
   "crystalmod.stall.shop_unavailable": "Shop service unavailable. Please retry later.",
   "crystalmod.stall.shop_submitted": "Shop #%s submitted for review. Edit its profile on the website.",
   "crystalmod.stall.shop_linked": "Stall link updated. Trading does not require registration.",
-  "crystalmod.stall.shop_look": "Look at your configured stall within 6 blocks."
+  "crystalmod.stall.shop_look": "Look at your configured stall within 6 blocks.",
+  "crystalmod.stall.shops": "Shops",
+  "crystalmod.stall.choose_item": "Select item",
+  "crystalmod.stall.loading": "Loading stall journal. Try again shortly."
 }

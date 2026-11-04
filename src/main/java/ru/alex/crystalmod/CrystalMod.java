@@ -49,6 +49,7 @@ public class CrystalMod {
         CrystalItems.register(modBus);
         CrystalMenus.register(modBus);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(StallSales::onBreak);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(StallSales::stopped);
         modBus.addListener(this::registerPayloads);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
@@ -59,7 +60,7 @@ public class CrystalMod {
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("2");
+        PayloadRegistrar registrar = event.registrar("3");
         // Обязательный (не .optional()) канал — заставляет NeoForge требовать мод на обеих сторонах.
         registrar.playBidirectional(
                 CrystalHandshakePayload.TYPE,
@@ -73,6 +74,9 @@ public class CrystalMod {
             if(ctx.player() instanceof net.minecraft.server.level.ServerPlayer player
                     && player.containerMenu instanceof MarketStallMenu menu && menu.containerId==payload.containerId())
                 menu.configure(player,payload.price(),payload.quantity(),payload.perUnit());
+        }));
+        registrar.playToServer(ru.alex.crystalmod.net.ShopRequestPayload.TYPE,ru.alex.crystalmod.net.ShopRequestPayload.STREAM_CODEC,(payload,ctx)->ctx.enqueueWork(()->{
+            if(ctx.player() instanceof net.minecraft.server.level.ServerPlayer player)StallShops.handle(player,payload);
         }));
         registrar.playToServer(AtmDepositPayload.TYPE, AtmDepositPayload.STREAM_CODEC, ServerPayloadHandler::handleAtmDeposit);
         registrar.playToServer(AtmWithdrawPayload.TYPE, AtmWithdrawPayload.STREAM_CODEC, ServerPayloadHandler::handleAtmWithdraw);
@@ -96,6 +100,8 @@ public class CrystalMod {
         // на сервере — обработчик-пустышка без единой ссылки на клиентские классы, который в
         // реальности никогда не вызовется (сервер playToClient-пакеты не получает, только шлёт).
         boolean client = FMLEnvironment.dist == Dist.CLIENT;
+        registrar.playToClient(ru.alex.crystalmod.net.ShopResponsePayload.TYPE,ru.alex.crystalmod.net.ShopResponsePayload.STREAM_CODEC,
+                client ? ru.alex.crystalmod.client.ShopScreen::handle : (payload,ctx)->{});
         registrar.playToClient(MyListingsResponsePayload.TYPE, MyListingsResponsePayload.STREAM_CODEC,
                 client ? ru.alex.crystalmod.client.ClientPayloadHandler::handleMyListingsResponse : (payload, ctx) -> {});
         registrar.playToClient(MarketBrowseResponsePayload.TYPE, MarketBrowseResponsePayload.STREAM_CODEC,

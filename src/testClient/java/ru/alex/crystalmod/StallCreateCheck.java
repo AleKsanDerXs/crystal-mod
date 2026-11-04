@@ -77,7 +77,7 @@ final class StallCreateCheck {
         if(++polls%10!=0)return;
         mc.getSingleplayerServer().execute(()->{try{
             var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var level=p.serverLevel();var s=(MarketStallEntity)level.getBlockEntity(stallPos);
-            var menu=(MarketStallMenu)p.containerMenu;var op=StallJournal.read(p.getServer(),s);
+            var menu=(MarketStallMenu)p.containerMenu;var op=StallTestJournal.read(p.getServer(),s);
             if(stage==0){
                 check(goods(p)==24 && MarketStallMenu.stock(s)==0,"16 transported ingots were sold without loss or duplication");
                 lastTx=op.txId;((Container)level.getBlockEntity(source)).setItem(0,new ItemStack(Items.IRON_INGOT,8));stage=1;

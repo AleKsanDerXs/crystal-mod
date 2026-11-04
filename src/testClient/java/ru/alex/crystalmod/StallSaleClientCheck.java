@@ -79,15 +79,18 @@ public final class StallSaleClientCheck {
                 level.setBlockAndUpdate(POS,CrystalItems.MARKET_STALL.get().defaultBlockState());
                 var block=CrystalItems.MARKET_STALL.get();var state=level.getBlockState(POS);
                 block.setPlacedBy(level,POS,state,player,new ItemStack(CrystalItems.MARKET_STALL_ITEM.get()));
-                player.setItemInHand(InteractionHand.OFF_HAND,new ItemStack(Items.IRON_INGOT));
+                player.teleportTo(0.5,-59,3.5);
+                player.setItemInHand(InteractionHand.OFF_HAND,new ItemStack(Items.SHIELD));
                 var hit=new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(POS),Direction.UP,POS,false);
                 block.useWithoutItem(state,level,POS,player,hit);
+                require(player.containerMenu instanceof MarketStallMenu,"owner opens the GUI while holding an offhand shield");
+                player.getInventory().setItem(0,new ItemStack(Items.IRON_INGOT,64));
+                require(((MarketStallMenu)player.containerMenu).selectItem(player,0),"owner selects a plain inventory sample through the GUI action");
                 ItemStack custom=new ItemStack(Items.DIAMOND);
                 custom.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,Component.literal("Do not strip my data"));
-                player.setItemInHand(InteractionHand.OFF_HAND,custom);
-                block.useWithoutItem(state,level,POS,player,hit);
-                require(((MarketStallEntity)level.getBlockEntity(POS)).sample.is(Items.IRON_INGOT),"custom item data is rejected instead of silently stripped");
-                player.setItemInHand(InteractionHand.OFF_HAND,ItemStack.EMPTY);
+                player.getInventory().setItem(1,custom);
+                require(!((MarketStallMenu)player.containerMenu).selectItem(player,1) && ((MarketStallEntity)level.getBlockEntity(POS)).sample.is(Items.IRON_INGOT),"custom item data is rejected instead of silently stripped");
+                player.getInventory().clearContent();player.setItemInHand(InteractionHand.OFF_HAND,ItemStack.EMPTY);
                 ((net.minecraft.world.Container)level.getBlockEntity(POS.below())).setItem(0,new ItemStack(Items.IRON_INGOT,64));
                 level.setBlockAndUpdate(new BlockPos(0,-60,3),Blocks.STONE.defaultBlockState());
                 player.setYRot(180);player.setXRot(10);player.teleportTo(0.5,-59,3.5);
@@ -110,12 +113,13 @@ public final class StallSaleClientCheck {
             });
         }
         if(!sceneReady) return;
+        if(Boolean.getBoolean("crystalmod.stallGuiTest") && !StallGuiCheck.tick(mc,POS))return;
         age++;
         if(age==20) mc.options.hideGui=true;
         if(age==40) {shot(mc,"market-01-counter");mc.options.hideGui=false;}
         if(age==60) server(mc,()->{
             var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
-            p.openMenu(new net.minecraft.world.SimpleMenuProvider((id,inv,x)->new MarketStallMenu(id,inv,POS),Component.translatable("block.crystalmod.market_stall")),POS);
+            MarketStallMenu.open(p,POS);
         });
         if(!configured && age>80 && mc.player.containerMenu instanceof MarketStallMenu) {
             configured=true;
@@ -139,22 +143,24 @@ public final class StallSaleClientCheck {
             s.owner=UUID.fromString("2429cce2-fd10-4367-abaa-f14545bac013");s.ownerName="MarketSeller";s.setChanged();
             xaero.pac.common.server.api.OpenPACServerAPI.get(p.getServer()).getServerClaimsManager()
                     .claim(p.level().dimension().location(),s.owner,0,0,0,false);
-            p.openMenu(new net.minecraft.world.SimpleMenuProvider((id,inv,x)->new MarketStallMenu(id,inv,POS),Component.translatable("block.crystalmod.market_stall")),POS);
+            MarketStallMenu.open(p,POS);
         });}
         if(age==135) server(mc,()->{
             var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
             for(int i=0;i<36;i++) p.getInventory().setItem(i,new ItemStack(Items.STONE,64));
             var menu=(MarketStallMenu)p.containerMenu;
             menu.clickMenuButton(p,0);
-            require(StallJournal.read(p.getServer(),menu.stall())==null,"full inventory rejects purchase before reserving money");
+            require(StallTestJournal.read(p.getServer(),menu.stall())==null,"full inventory rejects purchase before reserving money");
             p.getInventory().clearContent();
             var stall=menu.stall();stall.price=11;
             menu.clickMenuButton(p,0);
-            require(StallJournal.read(p.getServer(),stall)==null,"changed price rejects stale offer before reserving money");
+            require(StallTestJournal.read(p.getServer(),stall)==null,"changed price rejects stale offer before reserving money");
             stall.price=10;
-            p.openMenu(new net.minecraft.world.SimpleMenuProvider((id,inv,x)->new MarketStallMenu(id,inv,POS),Component.translatable("block.crystalmod.market_stall")),POS);
+            MarketStallMenu.open(p,POS);
         });
         if(age==160) shot(mc,"market-03-buy");
+        if(age==170 && Boolean.getBoolean("crystalmod.stallGuiTest"))server(mc,()->StallAsyncCheck.block(mc.getSingleplayerServer()));
+        if(age==200 && Boolean.getBoolean("crystalmod.stallGuiTest"))server(mc,()->StallAsyncCheck.release(mc.getSingleplayerServer().getPlayerList().getPlayers().get(0)));
         if(!bought && age>=180 && mc.player.containerMenu instanceof MarketStallMenu m && m.data.get(3)==0) {
             bought=true;mc.gameMode.handleInventoryButtonClick(m.containerId,0);
             mc.gameMode.handleInventoryButtonClick(m.containerId,0);
@@ -162,7 +168,7 @@ public final class StallSaleClientCheck {
         if(bought && !checked && age>200 && age%20==0) server(mc,()->{
             var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
             var s=(MarketStallEntity)p.level().getBlockEntity(POS);
-            var op=StallJournal.read(p.getServer(),s);
+            var op=StallTestJournal.read(p.getServer(),s);
             if(op==null || !op.phase.equals("complete")) return;
             int count=0;
             for(int i=0;i<36;i++) if(p.getInventory().getItem(i).is(Items.IRON_INGOT)) count+=p.getInventory().getItem(i).getCount();
@@ -185,7 +191,7 @@ public final class StallSaleClientCheck {
             if(doneTicks==55) shot(mc,"market-05-inventory");
             if(doneTicks==65) server(mc,()->{
                 var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
-                p.openMenu(new net.minecraft.world.SimpleMenuProvider((id,inv,x)->new MarketStallMenu(id,inv,POS),Component.translatable("block.crystalmod.market_stall")),POS);
+                MarketStallMenu.open(p,POS);
                 xaero.pac.common.server.api.OpenPACServerAPI.get(p.getServer()).getServerClaimsManager()
                         .unclaim(p.level().dimension().location(),0,0);
                 ((MarketStallMenu)p.containerMenu).clickMenuButton(p,0);
@@ -197,7 +203,7 @@ public final class StallSaleClientCheck {
             if(doneTicks>85 && doneTicks%20==0 && !refunded) server(mc,()->{
                 var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);
                 var s=(MarketStallEntity)p.level().getBlockEntity(POS);
-                var op=StallJournal.read(p.getServer(),s);
+                var op=StallTestJournal.read(p.getServer(),s);
                 if(op==null || op.txId.equals(saleTx) || !op.phase.equals("complete")) return;
                 require(MarketStallMenu.stock(s)==56,"closing menu before payment response refunds without taking stock");
                 int count=0;
@@ -208,10 +214,10 @@ public final class StallSaleClientCheck {
             if(refunded && refillStage==0) {refillStage=1;server(mc,()->{
                 var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var level=p.serverLevel();var s=(MarketStallEntity)level.getBlockEntity(POS);
                 ((net.minecraft.world.Container)level.getBlockEntity(POS.below())).clearContent();
-                p.openMenu(new net.minecraft.world.SimpleMenuProvider((id,inv,x)->new MarketStallMenu(id,inv,POS),Component.literal("Refill check")),POS);
-                var previous=StallJournal.read(p.getServer(),s).txId;
+                MarketStallMenu.open(p,POS);
+                var previous=StallTestJournal.read(p.getServer(),s).txId;
                 ((MarketStallMenu)p.containerMenu).clickMenuButton(p,0);
-                require(StallJournal.read(p.getServer(),s).txId.equals(previous),"empty stock rejects purchase without starting payment");
+                require(StallTestJournal.read(p.getServer(),s).txId.equals(previous),"empty stock rejects purchase without starting payment");
                 if(StallCreateCheck.ENABLED)StallCreateCheck.install(level,POS);
                 else{
                     var feed=POS.below().east();
@@ -222,7 +228,7 @@ public final class StallSaleClientCheck {
             });}
             if(refilledDue())server(mc,()->{
                 var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var s=(MarketStallEntity)p.level().getBlockEntity(POS);var menu=(MarketStallMenu)p.containerMenu;
-                var op=StallJournal.read(p.getServer(),s);
+                var op=StallTestJournal.read(p.getServer(),s);
                 if(StallCreateCheck.ENABLED)StallCreateCheck.observe(s,menu);
                 if(refillStage==3 && op.phase.equals("complete") && !op.txId.equals(refillTx)){
                     refillTx=op.txId;refillStage=4;

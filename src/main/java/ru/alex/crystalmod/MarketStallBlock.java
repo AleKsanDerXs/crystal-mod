@@ -3,7 +3,6 @@ package ru.alex.crystalmod;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -41,31 +40,9 @@ public class MarketStallBlock extends BaseEntityBlock {
         // Sneaking is reserved for Carry On / other tools. Never configure through that gesture.
         if (player.isShiftKeyDown()) return InteractionResult.PASS;
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof MarketStallEntity stall) {
-            if (!player.getOffhandItem().isEmpty() && player.getUUID().equals(stall.owner)) {
-                if (!StallSales.canEdit(stall) || net.neoforged.fml.ModList.get().isLoaded("openpartiesandclaims")
-                        && player instanceof net.minecraft.server.level.ServerPlayer sp
-                        && !StallClaimsCompat.canConfigure(sp, pos)) {
-                    player.displayClientMessage(Component.translatable("crystalmod.stall.not_owner"), true);
-                } else {
-                    // Keep only the cosmetic item id, never a copy of a backpack's contents.
-                    ItemStack sample = new ItemStack(player.getOffhandItem().getItem());
-                    if (!ItemStack.isSameItemSameComponents(sample,player.getOffhandItem())) {
-                        player.displayClientMessage(Component.translatable("crystalmod.stall.unsupported"),true);
-                        return InteractionResult.SUCCESS;
-                    }
-                    if (!ItemStack.isSameItemSameComponents(sample, stall.sample)) {
-                        stall.sample = sample;
-                        stall.setChanged();
-                        level.sendBlockUpdated(pos, state, state, 3);
-                    }
-                    player.displayClientMessage(Component.translatable("crystalmod.stall.selected"), true);
-                }
-            } else {
-                if (player instanceof net.minecraft.server.level.ServerPlayer sp) {
-                    sp.openMenu(new net.minecraft.world.SimpleMenuProvider(
-                            (id,inv,p) -> new MarketStallMenu(id,inv,pos),
-                            Component.translatable("block.crystalmod.market_stall")), pos);
-                }
+            if(player instanceof net.minecraft.server.level.ServerPlayer sp && !StallAccess.allowed(sp))return InteractionResult.SUCCESS;
+            if(player instanceof net.minecraft.server.level.ServerPlayer sp){
+                MarketStallMenu.open(sp,pos);
             }
         }
         return InteractionResult.SUCCESS;

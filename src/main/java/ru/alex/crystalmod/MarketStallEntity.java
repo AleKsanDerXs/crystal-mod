@@ -14,11 +14,14 @@ public class MarketStallEntity extends BlockEntity {
     String ownerName = "";
     UUID stallId = UUID.randomUUID();
     int price = 1, partySize = 1;
-    long lastCatalogPublish;
+    long lastCatalogPublish,catalogRevision;
+    boolean journalLoaded=true,journalLoading,journalError;
+    StallJournal.Operation operation;
     public ItemStack sample = ItemStack.EMPTY;
     public MarketStallEntity(BlockPos pos, BlockState state) { super(CrystalItems.MARKET_STALL_ENTITY.get(), pos, state); }
     @Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+        tag.putLong("CatalogRevision",catalogRevision);
         if (owner != null) tag.putUUID("Owner", owner);
         tag.putString("OwnerName",ownerName); tag.putUUID("StallId",stallId);
         tag.putInt("Price",price); tag.putInt("PartySize",partySize);
@@ -26,6 +29,8 @@ public class MarketStallEntity extends BlockEntity {
     }
     @Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
+        journalLoaded=false;journalLoading=false;journalError=false;operation=null;
+        catalogRevision=tag.getLong("CatalogRevision");
         owner = tag.hasUUID("Owner") ? tag.getUUID("Owner") : null;
         sample = ItemStack.parseOptional(registries, tag.getCompound("Sample"));
         ownerName=tag.getString("OwnerName");
