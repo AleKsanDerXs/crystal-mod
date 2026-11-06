@@ -128,5 +128,6 @@
   "crystalmod.stall.shop_look": "Look at your configured stall within 6 blocks.",
   "crystalmod.stall.shops": "Shops",
   "crystalmod.stall.choose_item": "Select item",
-  "crystalmod.stall.loading": "Loading stall journal. Try again shortly."
+  "crystalmod.stall.loading": "Loading stall journal. Try again shortly.",
+  "crystalmod.stall.storage_hint": "Place a chest or barrel containing stock directly under the stall. Other containers with a standard inventory may work. A double chest is read only from the block beneath the stall. Create Item Vault is not supported directly; feed its contents into a chest or barrel."
 }
