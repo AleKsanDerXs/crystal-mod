@@ -119,6 +119,7 @@ public class CrystalAPI {
             body.addProperty("tx_id",op.txId); body.addProperty("stall_id",stallId);
             body.addProperty("buyer",op.buyer); body.addProperty("seller",op.seller);
             body.addProperty("quantity",op.quantity); body.addProperty("price",op.price);
+            body.addProperty("dimension",op.dimension); body.addProperty("x",op.x); body.addProperty("y",op.y); body.addProperty("z",op.z); body.addProperty("item_id",op.itemId);
             String url=ConfigManager.CONFIG.apiBaseUrl.replaceAll("/+$", "")+"/crystals_stall_api.php?action="+action;
             var response=PhpApiClient.postJson(url,ConfigManager.CONFIG.apiSecret,body.toString());
             // A proxy/host error is an UNKNOWN outcome, never a reason to refund or retry with a new id.

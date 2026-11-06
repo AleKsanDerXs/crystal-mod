@@ -15,6 +15,7 @@ public class MarketStallRenderer implements BlockEntityRenderer<MarketStallEntit
         pose.pushPose();
         try {
             pose.translate(0.5, 1.18, 0.5);
+            pose.mulPose(com.mojang.math.Axis.YP.rotationDegrees(-stall.getBlockState().getValue(ru.alex.crystalmod.MarketStallBlock.FACING).toYRot()+180));
             pose.scale(0.6f, 0.6f, 0.6f);
             Minecraft.getInstance().getItemRenderer().renderStatic(stall.sample, ItemDisplayContext.FIXED, light, overlay, pose, buffers, stall.getLevel(), 0);
         } finally { pose.popPose(); }

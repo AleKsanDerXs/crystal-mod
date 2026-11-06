@@ -1,7 +1,19 @@
 {
   "variants": {
-    "": {
+    "facing=north": {
       "model": "crystalmod:block/market_stall"
+    },
+    "facing=east": {
+      "model": "crystalmod:block/market_stall",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "crystalmod:block/market_stall",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "crystalmod:block/market_stall",
+      "y": 270
     }
   }
 }
