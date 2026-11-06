@@ -25,8 +25,8 @@ public class MarketStallBlock extends BaseEntityBlock {
     @Override protected MapCodec<? extends BaseEntityBlock> codec() { return CODEC; }
     private static final net.minecraft.world.phys.shapes.VoxelShape SHAPE = net.minecraft.world.phys.shapes.Shapes.or(
             box(0,13,0,16,16,16), box(1,0,1,4,13,4), box(12,0,1,15,13,4),
-            box(1,0,12,4,13,15), box(12,0,12,15,13,15), box(1,5,7,15,8,9));
-    @Override protected net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state, net.minecraft.world.level.BlockGetter level, BlockPos pos, net.minecraft.world.phys.shapes.CollisionContext context) { return state.getValue(FACING).getAxis()==net.minecraft.core.Direction.Axis.X ? net.minecraft.world.phys.shapes.Shapes.or(box(0,13,0,16,16,16),box(1,0,1,4,13,4),box(12,0,1,15,13,4),box(1,0,12,4,13,15),box(12,0,12,15,13,15),box(7,5,1,9,8,15)) : SHAPE; }
+            box(1,0,12,4,13,15), box(12,0,12,15,13,15));
+    @Override protected net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state, net.minecraft.world.level.BlockGetter level, BlockPos pos, net.minecraft.world.phys.shapes.CollisionContext context) { return SHAPE; }
     @Override protected RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
     @Override public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new MarketStallEntity(pos, state); }
     @Override public void setPlacedBy(Level level, BlockPos pos, BlockState state, net.minecraft.world.entity.LivingEntity placer, ItemStack stack) {

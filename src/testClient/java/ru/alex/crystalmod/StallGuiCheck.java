@@ -16,6 +16,7 @@ import ru.alex.crystalmod.client.ShopScreen;
 /** Drives the real item picker, shop editor, linking and unlinking through GUI packets. */
 final class StallGuiCheck {
     private static int stage,ticks,shopId,captureAfter;
+    private static java.util.UUID stallId;
     private static boolean scheduled;
     private static volatile boolean done;
     private static final String NAME="GUI Артель "+System.currentTimeMillis();
@@ -73,9 +74,19 @@ final class StallGuiCheck {
                 try{
                     var p=mc.getSingleplayerServer().getPlayerList().getPlayers().get(0);var stall=(MarketStallEntity)p.level().getBlockEntity(pos);
                     if(p.getInventory().getItem(0).getCount()!=64 || !p.getInventory().getItem(0).is(Items.COPPER_INGOT) || p.getInventory().getItem(1).getCount()!=64 || !stall.sample.is(Items.IRON_INGOT))throw new AssertionError("Ghost picker consumed goods");
-                    CrystalMod.LOGGER.info("STALLGUI RESULT: PASS shop={} name={} stall={}",shopId,NAME,stall.stallId);done=true;
+                    stallId=stall.stallId;CrystalMod.LOGGER.info("STALLGUI SHOP: PASS shop={} name={} stall={}",shopId,NAME,stallId);
+                    p.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,new ItemStack(CrystalItems.SHOP_LEDGER.get()));
+                    CrystalItems.SHOP_LEDGER.get().use(p.level(),p,net.minecraft.world.InteractionHand.MAIN_HAND);
+                    stage=17;
                 }catch(Throwable e){CrystalMod.LOGGER.error("STALLGUI RESULT: FAIL",e);mc.execute(mc::stop);}
             });}
+            else if(stage==17 && mc.screen instanceof ru.alex.crystalmod.client.ShopLedgerScreen){
+                for(var c:mc.screen.children())if(c instanceof Button b && b.getMessage().getString().contains(NAME)){b.onPress();stage=18;break;}
+            }else if(stage==18 && mc.screen instanceof ru.alex.crystalmod.client.ShopLedgerScreen){
+                for(var c:mc.screen.children())if(c instanceof Button b && b.getMessage().getString().equals("К магазинам")){
+                    shot(mc,"market-gui-ledger");mc.screen.onClose();CrystalMod.LOGGER.info("STALLGUI RESULT: PASS shop={} name={} stall={}",shopId,NAME,stallId);done=true;break;
+                }
+            }
         }catch(Throwable e){CrystalMod.LOGGER.error("STALLGUI RESULT: FAIL",e);mc.stop();}
         return done;
     }

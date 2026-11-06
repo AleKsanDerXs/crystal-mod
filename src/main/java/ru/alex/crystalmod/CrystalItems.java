@@ -80,6 +80,8 @@ public class CrystalItems {
             new Item.Properties().stacksTo(1).fireResistant()
     );
 
+    public static final DeferredItem<ShopLedgerItem> SHOP_LEDGER = ITEMS.registerItem("shop_ledger", ShopLedgerItem::new, new Item.Properties().stacksTo(1));
+
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> TAB = TABS.register(
             "main",
             () -> CreativeModeTab.builder()
@@ -89,6 +91,7 @@ public class CrystalItems {
                         output.accept(CRYSTAL_NOTE.get());
                         output.accept(ATM_ITEM.get());
                         output.accept(MARKET_STALL_ITEM.get());
+                        output.accept(SHOP_LEDGER.get());
                         output.accept(MARKET_TERMINAL_ITEM.get());
                     })
                     .build()

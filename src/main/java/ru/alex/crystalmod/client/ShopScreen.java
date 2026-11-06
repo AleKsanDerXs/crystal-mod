@@ -35,6 +35,8 @@ public final class ShopScreen extends Screen {
     public static void handle(ShopResponsePayload p,IPayloadContext ctx){ctx.enqueueWork(()->{
         Minecraft mc=Minecraft.getInstance();
         if(mc.player==null || mc.player.containerMenu.containerId!=p.containerId())return;
+        if(p.action().equals("ledger_open")){mc.setScreen(new ShopLedgerScreen(p.containerId()));return;}
+        if(mc.screen instanceof ShopLedgerScreen ledger){ledger.receive(p);return;}
         if(p.action().equals("open")){mc.setScreen(new ShopScreen(mc.screen,p.containerId()));return;}
         if(mc.screen instanceof StallItemScreen selector && p.action().equals("select")){selector.error(p.json());return;}
         if(mc.screen instanceof ShopScreen screen && screen.containerId==p.containerId() && screen.lastRequest==p.requestId())screen.apply(p);

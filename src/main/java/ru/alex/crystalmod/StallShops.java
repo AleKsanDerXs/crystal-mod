@@ -77,6 +77,7 @@ public final class StallShops {
             switch(request.action()){
                 case "list"->{action="shop_list_mod";body.addProperty("page",Math.max(1,integer(input,"page",1)));body.addProperty("per_page",4);var stall=owned(p);if(stall!=null)body.addProperty("stall_id",stall.stallId.toString());}
                 case "get"->{action="shop_get_mod";body.addProperty("id",integer(input,"id",0));}
+                case "summary"->{action="shop_summary_mod";body.addProperty("id",integer(input,"id",0));}
                 case "save"->{
                     action="shop_apply_mod";if(input.has("id"))body.addProperty("id",integer(input,"id",0));
                     for(String key:new String[]{"name","specialization","tagline","about","accent","emblem","cover"}){
